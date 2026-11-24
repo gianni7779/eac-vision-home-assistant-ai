@@ -229,6 +229,22 @@ class VisionTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(detector.events()), 1)
         self.assertEqual(detector.events()[0]["label"], "persona")
 
+    async def test_ai_timeline_reads_events_for_selected_day(self):
+        self.vision.ai = ai.VisionAI(self.vision)
+        now = int(time.time() * 1000)
+        event = self.vision.ai.publish(self.cid, "persona", {"score": .9, "box": [.1, .1, .3, .6]},
+                                       np.zeros((360, 640, 3), dtype=np.uint8), now)
+        day = time.strftime("%Y-%m-%d", time.localtime(now / 1000))
+        url = f"/api/ai/events?cam={self.cid}&day={day}"
+        result = await (await self.ingress.get(url)).json()
+        self.assertEqual([item["id"] for item in result], [event["id"]])
+        self.assertEqual((await self.ingress.get(url.replace(day, "invalid"))).status, 400)
+        path = self.vision.ai.event_root / day / "eventi.jsonl"
+        path.write_text(json.dumps(event) + "\n", encoding="utf-8")
+        self.vision.ai.recent.clear()
+        persisted = await (await self.ingress.get(url)).json()
+        self.assertEqual([item["id"] for item in persisted], [event["id"]])
+
     async def test_onvif_changes_are_detected_without_saving_credentials(self):
         self.entry["data"]["password"] = "updated"
         self.write_entries()

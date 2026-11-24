@@ -4,7 +4,7 @@ const $ = id => document.getElementById(id);
 const base = location.pathname.endsWith('/') ? location.pathname : location.pathname + '/';
 const apiUrl = path => base + path;
 let state = null, page = 'live', players = [], visibleIds = '', selectedCam = null, toastTimer = 0, hideTimer = 0, storageDirty = false;
-let recordingSegments = [], recordingIndex = -1, pendingSeek = 0, recordingLoad = 0;
+let recordingSegments = [], recordingEvents = [], recordingIndex = -1, pendingSeek = 0, recordingLoad = 0;
 let previewIndex = -1, previewOffset = 0, previewLast = 0, previewDragging = false, previewSecond = 0, skipTimelineClick = false;
 let detailCamId = null, detailPlayer = null, detailCams = [], detailAudioAvailable = false, detailAudioChecked = false, detailAudioOn = false, preferredRecordingCam = null;
 let aiState = null, eventCursor = 0, preferredRecordingDay = null, preferredRecordingSecond = null;
@@ -315,10 +315,11 @@ function stopRecordingPlayback() {
   for(const button of $('record-hours').children)button.classList.remove('active');
 }
 function showRecordingState(message) {
-  recordingSegments=[];stopRecordingPlayback();
+  recordingSegments=[];recordingEvents=[];stopRecordingPlayback();
   $('record-count').textContent='Nessun video';
   $('record-summary').textContent=message;
   $('timeline-coverage').replaceChildren();
+  $('timeline-events').replaceChildren();
   $('record-hours').replaceChildren();
   $('record-day-label').textContent=$('record-day').value||'Nessuna data';
 }
@@ -343,6 +344,14 @@ function renderRecordingTimeline() {
     const bar=document.createElement('span');bar.className='timeline-span';
     bar.style.left=(start/86400*100)+'%';bar.style.width=((end-start)/86400*100)+'%';coverage.append(bar);
   }
+  const events=$('timeline-events');events.replaceChildren();
+  for(const event of recordingEvents){
+    if(!['persona','animale','veicolo'].includes(event.label))continue;
+    const at=new Date(event.start),second=at.getHours()*3600+at.getMinutes()*60+at.getSeconds();
+    const mark=document.createElement('span');mark.className='timeline-event '+event.label;
+    mark.style.left=(second/86400*100)+'%';
+    events.append(mark);
+  }
   for(let hour=0;hour<24;hour++){
     const button=document.createElement('button');button.type='button';button.className='hour-button';
     button.dataset.hour=String(hour);button.textContent=String(hour).padStart(2,'0')+':00';
@@ -354,7 +363,7 @@ function renderRecordingTimeline() {
   const total=recordingSegments.reduce((sum,s)=>sum+Math.max(0,Math.min(86400,clipClock(s)+s.dur)-clipClock(s)),0);
   const minutes=Math.round(total/60);
   $('record-count').textContent=`${Math.floor(minutes/60)} h ${String(minutes%60).padStart(2,'0')} min`;
-  $('record-summary').textContent='Il blu indica le ore disponibili. Durante la visione, il video prosegue automaticamente.';
+  $('record-summary').textContent=`Il blu indica le ore disponibili. ${recordingEvents.length} eventi AI in questo giorno. Durante la visione, il video prosegue automaticamente.`;
   $('record-day-label').textContent=$('record-day').value;
 }
 function playRecording(index, offset=0) {
@@ -429,11 +438,16 @@ async function loadRecordings() {
 async function loadSegments() {
   const cid=$('record-cam').value,day=$('record-day').value,token=++recordingLoad;
   stopRecordingPlayback();
+  recordingEvents=[];$('timeline-events').replaceChildren();
   if(!cid||!day){showRecordingState('Nessuna registrazione disponibile. Controlla che la registrazione continua e il disco siano attivi.');return}
   try{
-    const segments=await request('api/recordings/'+encodeURIComponent(cid)+'?day='+encodeURIComponent(day));
+    const [segments,events]=await Promise.all([
+      request('api/recordings/'+encodeURIComponent(cid)+'?day='+encodeURIComponent(day)),
+      request('api/ai/events?cam='+encodeURIComponent(cid)+'&day='+encodeURIComponent(day)).catch(()=>[])
+    ]);
     if(token!==recordingLoad)return;
     recordingSegments=segments.filter(s=>!s.live&&Number(s.dur)>0).sort((a,b)=>clipClock(a)-clipClock(b));
+    recordingEvents=events;
     if(!recordingSegments.length){showRecordingState('Nessuna registrazione completata in questo giorno. Aggiorna tra qualche minuto.');return}
     renderRecordingTimeline();
     if(preferredRecordingSecond!=null){const second=preferredRecordingSecond;preferredRecordingSecond=null;seekRecording(second)}

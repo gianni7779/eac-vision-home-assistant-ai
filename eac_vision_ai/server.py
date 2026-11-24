@@ -343,6 +343,11 @@ async def ai_events(request: web.Request) -> web.Response:
     cam, label = request.query.get("cam", ""), request.query.get("label", "")
     if label and label not in {"persona", "veicolo", "animale"}:
         raise web.HTTPBadRequest(text="Tipo di evento non valido")
+    if "day" in request.query:
+        try:
+            return web.json_response(ai_of(request).day_events(request.query["day"], cam, label))
+        except ValueError as exc:
+            raise web.HTTPBadRequest(text=str(exc)) from exc
     return web.json_response(ai_of(request).events(cam, label, before, limit))
 
 

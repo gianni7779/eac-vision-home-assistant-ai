@@ -1,5 +1,10 @@
 # Novità
 
+## 0.1.3
+
+- La barra giornaliera delle registrazioni mostra dove l'AI ha rilevato persone (arancione), animali (verde) e veicoli (viola).
+- L'API degli eventi accetta `day=AAAA-MM-GG` e legge gli eventi archiviati di quel giorno, anche se non sono più tra gli ultimi 500 in memoria. Le app possono mostrare gli stessi segni colorati.
+
 ## 0.1.2
 
 - Analisi AI a 5 fotogrammi al secondo, con nuove analisi fino a tre volte al secondo durante il movimento: un passaggio breve può essere confermato in due fotogrammi come nella versione PC.

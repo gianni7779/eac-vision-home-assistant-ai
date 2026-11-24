@@ -349,6 +349,31 @@ class VisionAI:
         return [event for event in self.recent if (not cam or event["cam"] == cam)
                 and (not label or event["label"] == label) and (not before or event["start"] < before)][:max(1, min(limit, 500))]
 
+    def day_events(self, day: str, cam: str = "", label: str = "") -> list[dict]:
+        try:
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
+                raise ValueError
+            date = datetime.strptime(day, "%Y-%m-%d").date()
+        except ValueError as exc:
+            raise ValueError("Data eventi non valida") from exc
+        start = int(datetime.combine(date, datetime.min.time()).timestamp() * 1000)
+        end = int(datetime.combine(date + timedelta(days=1), datetime.min.time()).timestamp() * 1000)
+        found = {event["id"]: event for event in self.recent if start <= event["start"] < end}
+        path = self.event_root / day / "eventi.jsonl"
+        try:
+            with path.open(encoding="utf-8") as source:
+                for line in source:
+                    try:
+                        event = json.loads(line)
+                        if EVENT_ID.fullmatch(event.get("id", "")) and start <= event["start"] < end:
+                            found[event["id"]] = event
+                    except (ValueError, KeyError, TypeError):
+                        continue
+        except FileNotFoundError:
+            pass
+        return sorted((event for event in found.values() if (not cam or event["cam"] == cam)
+                       and (not label or event["label"] == label)), key=lambda event: event["start"])
+
     def image(self, event_id: str) -> Path | None:
         if not EVENT_ID.fullmatch(event_id):
             return None
