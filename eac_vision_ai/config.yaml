@@ -1,0 +1,26 @@
+name: EAC Vision AI Home Assistant
+slug: eac_vision_ai
+version: "0.1.0"
+description: Registrazione ONVIF e rilevamento AI di persone, veicoli e animali per mini PC
+arch:
+  - amd64
+startup: services
+boot: auto
+init: false
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:cctv
+panel_title: EAC Vision AI
+watchdog: "http://[HOST]:[PORT:8099]/"
+homeassistant_api: true
+map:
+  - type: homeassistant_config
+    read_only: true
+  - type: media
+    read_only: false
+ports:
+  8767/tcp: 8767
+ports_description:
+  8767/tcp: Client EAC Vision nella rete locale
+options: {}
+schema: {}

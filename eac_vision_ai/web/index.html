@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071522">
+  <title>EAC Vision AI Home Assistant</title>
+  <link rel="icon" href="web/icon.png" type="image/png">
+  <link rel="stylesheet" href="web/style.css">
+  <link rel="stylesheet" href="web/dashboard.css">
+</head>
+<body>
+  <div id="nav-backdrop" hidden></div>
+  <div id="edge-hotspot" aria-hidden="true"></div>
+  <aside id="sidebar" aria-label="Navigazione principale">
+    <div class="brand"><img src="web/icon.png" alt="" class="brand-icon"><span><strong>EAC Vision AI</strong><small>Home Assistant · mini PC</small></span></div>
+    <div class="nav-group-label">NAVIGAZIONE</div>
+    <button data-page="live" class="nav active"><span class="nav-icon">▦</span><span>Telecamere</span></button>
+    <button data-page="recordings" class="nav"><span class="nav-icon">◷</span><span>Registrazioni</span></button>
+    <button data-page="events" class="nav"><span class="nav-icon">✦</span><span>Eventi AI</span></button>
+    <button data-page="settings" class="nav"><span class="nav-icon">⚙</span><span>Impostazioni</span></button>
+    <div class="side-bottom"><span id="ha-dot" class="dot"></span><span id="ha-label">Collegamento a HA…</span></div>
+  </aside>
+  <nav id="mobile-nav" aria-label="Navigazione rapida">
+    <button data-page="live" class="nav active"><span>▦</span><small>Telecamere</small></button>
+    <button data-page="recordings" class="nav"><span>◷</span><small>Archivio</small></button>
+    <button data-page="events" class="nav"><span>✦</span><small>Eventi</small></button>
+    <button data-page="settings" class="nav"><span>⚙</span><small>Impostazioni</small></button>
+  </nav>
+  <main id="main">
+    <div id="topbar">
+      <button id="menu-button" title="Menu" aria-label="Apri menu">☰</button>
+      <div class="top-title"><strong id="page-title">Telecamere</strong><span id="top-subtitle">Vista Principale</span></div>
+      <div class="top-spacer"></div>
+      <label id="live-budget-label">Live <select id="live-budget"><option value="4">4</option><option value="8">8</option><option value="16">16</option></select></label>
+      <button id="refresh-button" title="Aggiorna da Home Assistant">⟳</button>
+    </div>
+    <section id="live-page" class="page live-page">
+      <div id="camera-grid" class="camera-grid"></div>
+      <div id="empty-live" class="empty" hidden><span class="empty-icon">◉</span><h1>La tua vista è pronta</h1><p>Importa le telecamere ONVIF già presenti in Home Assistant e scegli quali mostrare.</p><button id="setup-button" class="primary">Configura telecamere</button></div>
+    </section>
+    <div id="camera-detail" class="camera-detail" role="dialog" aria-modal="true" aria-label="Telecamera" hidden>
+      <div class="detail-header"><button id="detail-close" type="button" aria-label="Torna alla griglia">← <span>Griglia</span></button><div class="detail-heading"><strong id="detail-name">Telecamera</strong><small id="detail-counter">1 / 1</small></div><span id="detail-rec" class="badge rec" hidden>● REC</span></div>
+      <div id="detail-stage" class="detail-stage"><img id="detail-snapshot" alt=""><video id="detail-video" autoplay muted playsinline></video><div id="detail-status" class="detail-status" role="status" hidden></div></div>
+      <div class="detail-controls"><button id="detail-prev" type="button" aria-label="Telecamera precedente">‹</button><button id="detail-audio" type="button" aria-pressed="false" disabled>🔇 Audio</button><button id="detail-recordings" type="button">◷ Registrazioni</button><button id="detail-reload" type="button" aria-label="Ricollega telecamera">⟳</button><button id="detail-fullscreen" type="button">⛶ Schermo intero</button><button id="detail-next" type="button" aria-label="Telecamera successiva">›</button></div>
+    </div>
+    <section id="recordings-page" class="page inner-page" hidden>
+      <div class="section-head"><div><span class="eyebrow">ARCHIVIO VIDEO</span><h1>Registrazioni</h1><p>Scegli una telecamera e un giorno, poi tocca l’ora da rivedere.</p></div><span id="record-count" class="pill">—</span></div>
+      <div class="record-controls panel"><label>Telecamera <select id="record-cam"></select></label><label>Giorno <span class="day-controls"><button id="record-prev" type="button" aria-label="Giorno precedente">‹</button><select id="record-day"></select><button id="record-next" type="button" aria-label="Giorno successivo">›</button></span></label><button id="record-refresh" type="button">⟳ Aggiorna</button></div>
+      <div class="record-workspace"><div class="record-player panel"><div class="player-heading"><div><span class="eyebrow">RIPRODUZIONE</span><strong id="playback-title">Scegli un orario</strong></div></div><div class="video-wrap"><video id="playback" controls playsinline hidden></video><div id="player-empty"><span>▶</span><strong>Pronto per la riproduzione</strong><small>Seleziona un orario sulla barra per iniziare.</small></div></div></div>
+      <div class="timeline-panel panel"><div class="timeline-heading"><div><span class="eyebrow">GIORNATA</span><h2 id="record-day-label">—</h2></div><strong id="timeline-clock">--:--:--</strong></div><div id="record-timeline" class="record-timeline" role="slider" tabindex="0" aria-label="Ora della registrazione" aria-valuemin="0" aria-valuemax="1439" aria-valuenow="0" aria-valuetext="00:00"><div id="timeline-coverage" class="timeline-coverage"></div><div id="timeline-marker" class="timeline-marker" hidden></div><div id="timeline-preview" class="timeline-preview" hidden><video id="timeline-preview-video" muted playsinline preload="auto"></video><strong id="timeline-preview-clock">00:00:00</strong></div></div><div id="timeline-ticks" class="timeline-ticks"></div><div class="timeline-legend"><span><i class="coverage-key"></i>Video disponibile</span><span>Tocca la barra per andare all’ora desiderata</span></div><div id="record-hours" class="record-hours" aria-label="Ore del giorno"></div><p id="record-summary" class="record-summary">Scegli una telecamera per vedere le riprese.</p></div></div>
+    </section>
+    <section id="events-page" class="page inner-page" hidden>
+      <div class="section-head"><div><span class="eyebrow">RILEVAMENTO AI</span><h1>Eventi rilevati</h1><p>Persone, veicoli e animali in movimento, con istantanea e accesso alla registrazione.</p></div><button id="events-refresh" type="button">⟳ Aggiorna</button></div>
+      <div class="record-controls panel"><label>Telecamera <select id="events-cam"><option value="">Tutte</option></select></label><label>Tipo <select id="events-label"><option value="">Tutti</option><option value="persona">Persone</option><option value="veicolo">Veicoli</option><option value="animale">Animali</option></select></label><span id="events-status" class="muted">Caricamento…</span></div>
+      <div id="events-list" class="events-grid"></div><button id="events-more" type="button" hidden>Mostra eventi precedenti</button>
+    </section>
+    <section id="settings-page" class="page inner-page" hidden>
+      <div class="section-head"><div><span class="eyebrow">CENTRO DI CONTROLLO</span><h1>Impostazioni</h1><p>Gestisci telecamere, archivio e collegamento agli altri dispositivi.</p></div><button id="discover-button" class="primary">⟳ Aggiorna da HA</button></div>
+      <div class="settings-jump"><button type="button" data-jump="settings-cameras">Telecamere</button><button type="button" data-jump="settings-ai">Rilevamento AI</button><button type="button" data-jump="settings-storage">Archivio</button><button type="button" data-jump="settings-view">Vista</button><button type="button" data-jump="settings-clients">Altri dispositivi</button></div>
+      <div id="ha-error" class="notice" hidden></div>
+      <div id="source-error" class="notice" hidden></div>
+      <div id="video-error" class="notice" hidden></div>
+      <div class="status-grid" aria-label="Stato del sistema"><div class="status-card"><span>Telecamere ONVIF</span><strong id="metric-cameras">—</strong><small id="metric-cameras-detail">In attesa</small></div><div class="status-card"><span>Registrazioni attive</span><strong id="metric-recording">—</strong><small>Flussi salvati adesso</small></div><div class="status-card"><span>Archivio</span><strong id="metric-storage">—</strong><small id="metric-storage-detail">Verifica in corso</small></div><div class="status-card"><span>Memoria disponibile</span><strong id="metric-memory">—</strong><small id="metric-memory-detail">Sul dispositivo Home Assistant</small></div><div class="status-card"><span>Spazio usato da EAC Vision</span><strong id="metric-app-disk">—</strong><small id="metric-app-disk-detail">Solo registrazioni</small></div><div class="status-card"><span>Memoria dell’app</span><strong id="metric-app-ram">—</strong><small>Servizio e processi video</small></div><div class="status-card"><span>CPU dell’app</span><strong id="metric-app-cpu">—</strong><small>100% equivale a un core</small></div></div>
+      <div id="settings-cameras" class="panel"><div class="panel-heading"><div><span class="eyebrow">01 · SORGENTI</span><h2>Telecamere da Home Assistant</h2><p>I flussi e i profili vengono letti dall’integrazione ONVIF. Qui scegli nomi, vista e registrazione.</p></div><span id="cam-count" class="pill">0 / 16</span></div><div id="camera-list" class="camera-list"></div></div>
+      <div id="settings-ai" class="panel"><span class="eyebrow">02 · INTELLIGENZA ARTIFICIALE</span><h2>Rilevamento AI</h2><p>Lo stesso modello YOLOX Tiny della versione PC riconosce persone, veicoli e animali quando c’è movimento. L’analisi gira sulla CPU del mini PC; la registrazione continua resta separata.</p><div class="ai-options"><label class="view-check"><input id="ai-enabled" type="checkbox"> Attiva rilevamento AI</label><label>Telecamere analizzate insieme <select id="ai-max-cameras"><option value="1">1</option><option value="2">2</option><option value="4">4</option><option value="8">8</option><option value="16">16</option></select></label></div><p id="ai-status" class="muted">Avvio…</p><div id="ai-camera-list" class="ai-camera-list"></div></div>
+      <div id="settings-storage" class="panel"><div class="panel-heading"><div><span class="eyebrow">02 · REGISTRAZIONE</span><h2>Disco o NAS</h2><p>Usa un archivio montato in Home Assistant sotto <code>/media</code>. Le registrazioni vecchie si cancellano automaticamente, per impostazione iniziale dopo 3 giorni. L’app libera spazio anche quando raggiunge il limite o il disco si riempie.</p></div><span id="storage-pill" class="pill">Non pronto</span></div><form id="storage-form" class="storage-form"><label>Cartella già esistente sul disco/NAS<input id="storage-path" placeholder="/media/NAS" required></label><label>Conserva per giorni<input id="retention-days" type="number" min="1" max="365" value="3" required></label><label>Limite GB (0 = automatico)<input id="max-gb" type="number" min="0" max="100000" value="0" required></label><button class="primary" type="submit">Salva archivio</button></form><p id="storage-message" class="muted"></p></div>
+      <div id="settings-view" class="panel settings-row"><div><span class="eyebrow">03 · RIPRODUZIONE</span><h2>Vista Principale</h2><p class="muted">Decidi quanti video avviare insieme sul dispositivo con cui stai guardando. Le altre telecamere restano visibili come anteprima.</p></div><label>Video live contemporanei<select id="settings-live-budget"><option value="4">4 live</option><option value="8">8 live</option><option value="16">16 live</option></select></label><label class="view-check"><input id="show-camera-names" type="checkbox" checked> Mostra nomi delle telecamere nel live</label></div>
+      <div id="settings-clients" class="panel"><span class="eyebrow">04 · COLLEGAMENTO</span><h2>PC, TV e telefono</h2><p>Nell’app EAC Vision scegli <b>Collega EAC Vision NVR</b>. Inserisci l’indirizzo del dispositivo Home Assistant, la porta <b>8767</b> e il codice qui sotto. Usa l’IP locale quando sei a casa.</p><div class="key-row"><code id="client-key">…</code><button id="copy-key">Copia codice</button></div><form id="key-form" class="key-form"><label>Codice personalizzato (12-64 caratteri)<input id="new-client-key" minlength="12" maxlength="64" pattern="[A-Za-z0-9_-]+" autocomplete="off" placeholder="Scegli un codice personale"></label><button type="submit">Salva codice</button><button id="generate-client-key" type="button">Genera breve</button></form><p class="muted">Dopo il cambio, aggiorna il codice sui dispositivi già collegati.</p><div class="remote-help"><h3>Fuori casa con Tailscale</h3><p>Attiva Tailscale sul dispositivo con EAC Vision e su quello da cui guardi. Nell’app inserisci l’IP Tailscale di Home Assistant (di solito <code>100.x.y.z</code>) o il nome MagicDNS, con porta <b>8767</b>. Non usare la porta 8123 di Home Assistant.</p><h3>Se usi DuckDNS</h3><p>Il normale indirizzo DuckDNS di Home Assistant non dà accesso diretto a EAC Vision NVR. Per usarlo nell’app serve un proxy HTTPS dedicato che inoltri <code>/eacnvr/</code> alla porta 8767 e supporti WebSocket. Non aprire la porta 8767 direttamente su Internet.</p></div></div>
+      <p id="app-version" class="version-note"></p>
+    </section>
+  </main>
+  <dialog id="camera-dialog"><form id="camera-form" method="dialog"><div class="dialog-heading"><div><span class="eyebrow">TELECAMERA ONVIF</span><h2 id="dialog-title">Configura telecamera</h2></div><button id="dialog-close" type="button" aria-label="Chiudi">×</button></div><p id="dialog-entity" class="muted"></p><label>Nome<input id="cam-name" maxlength="80" required></label><p id="source-hint" class="muted">Il flusso viene preso dall’integrazione ONVIF di Home Assistant.</p><label>Registrazione<select id="cam-mode"><option value="continuous">Continua · 24 ore su 24</option><option value="off">Spenta</option></select></label><label class="check"><input id="cam-selected" type="checkbox"> Mostra nella vista Principale</label><div class="dialog-actions"><button type="submit" class="primary">Salva telecamera</button></div></form></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script src="web/app.js" defer></script>
+</body>
+</html>
