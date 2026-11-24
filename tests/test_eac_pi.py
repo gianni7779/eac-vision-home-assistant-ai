@@ -82,7 +82,7 @@ class VisionTest(unittest.IsolatedAsyncioTestCase):
         info = await response.json()
         self.assertEqual(info["app"], "EAC Vision NVR")
         self.assertEqual(info["name"], "EAC Vision AI Home Assistant")
-        self.assertEqual(info["version"], "0.1.1")
+        self.assertEqual(info["version"], core.APP_VERSION)
         denied = await self.lan.get("/eacnvr/cameras", headers={"Origin": "http://localhost"})
         self.assertEqual(denied.status, 403)
         self.assertEqual(denied.headers.get("Access-Control-Allow-Origin"), "*")
@@ -214,6 +214,20 @@ class VisionTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue((await image.read()).startswith(b"\xff\xd8"))
         remote = await (await self.lan.get("/eacnvr/state?key=" + self.vision.client_key)).json()
         self.assertIn(self.cid, remote["cams"])
+
+    async def test_ai_person_crossing_creates_event_on_two_close_frames(self):
+        self.vision.ai = ai.VisionAI(self.vision)
+        detector = self.vision.ai
+        detector.runtime[self.cid] = {"counts": dict.fromkeys(ai.LABELS, 0), "tracks": {}}
+        frame = np.zeros((360, 640, 3), dtype=np.uint8)
+        motion = np.ones((90, 160), dtype=bool)
+        person = [{"label": "persona", "score": .88, "box": [.2, .1, .3, .7]}]
+        at = int(time.time() * 1000)
+        detector.follow(self.cid, frame, motion, at, person)
+        self.assertEqual(detector.events(), [])
+        detector.follow(self.cid, frame, motion, at + 400, person)
+        self.assertEqual(len(detector.events()), 1)
+        self.assertEqual(detector.events()[0]["label"], "persona")
 
     async def test_onvif_changes_are_detected_without_saving_credentials(self):
         self.entry["data"]["password"] = "updated"

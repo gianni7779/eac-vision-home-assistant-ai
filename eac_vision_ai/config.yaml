@@ -1,6 +1,6 @@
 name: EAC Vision AI Home Assistant
 slug: eac_vision_ai
-version: "0.1.1"
+version: "0.1.2"
 description: Registrazione ONVIF e rilevamento AI di persone, veicoli e animali per mini PC
 arch:
   - amd64

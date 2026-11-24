@@ -451,7 +451,10 @@ async function loadAISettings(){
     for(const [id,cam] of Object.entries(aiState.cams)){
       const box=document.createElement('div');box.className='ai-camera';
       const heading=document.createElement('strong');heading.textContent=cam.name;box.append(heading);
-      const small=document.createElement('small');small.textContent=cam.watching?'Analisi attiva':cam.error||'In attesa';box.append(small);
+      const small=document.createElement('small');
+      let aiStatus=!cam.detect?'Rilevamento disattivato':cam.limited?'Fuori dal limite delle camere AI: aumenta «Telecamere analizzate insieme»':cam.error||(!cam.watching?'In attesa del video':cam.frame_age_s>5?'Video fermo da '+Math.round(cam.frame_age_s)+' s':'Analisi attiva');
+      if(cam.watching)aiStatus+=` · ${cam.frames} fotogrammi · ${cam.inferences} analisi`;
+      small.textContent=aiStatus;box.append(small);
       const options=document.createElement('div');options.className='ai-camera-options';
       for(const [field,label] of [['detect','Rileva'],['persona','Persone'],['veicolo','Veicoli'],['animale','Animali']]){
         const input=document.createElement('input');input.type='checkbox';input.checked=field==='detect'?cam.detect:cam.labels[field];

@@ -1,5 +1,11 @@
 # Novità
 
+## 0.1.2
+
+- Analisi AI a 5 fotogrammi al secondo, con nuove analisi fino a tre volte al secondo durante il movimento: un passaggio breve può essere confermato in due fotogrammi come nella versione PC.
+- Il movimento resta attivo per tre secondi dopo l'ultimo cambiamento; soglia regolata dalla sensibilità della telecamera e filtro per i cambi di luce estesi.
+- «Analisi attiva» compare solo dopo il primo fotogramma ricevuto. Ogni camera mostra fotogrammi e analisi elaborati, eventuale video fermo e se è esclusa dal limite delle camere AI.
+
 ## 0.1.1
 
 - Aggiunto il flusso HLS/TS come alternativa al formato fMP4 per i client iPhone con camere H.264.

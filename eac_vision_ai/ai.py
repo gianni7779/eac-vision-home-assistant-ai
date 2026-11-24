@@ -157,36 +157,47 @@ class VisionAI:
 
     async def watch(self, cid: str):
         runtime = self.runtime.setdefault(cid, {"motion": False, "counts": dict.fromkeys(LABELS, 0),
-                                               "tracks": {}, "error": "", "watching": False, "last_infer": 0})
+                                               "tracks": {}, "error": "", "watching": False, "last_infer": 0,
+                                               "motion_until": 0, "last_queued": 0, "frames": 0,
+                                               "inferences": 0, "last_frame": 0})
         frame_size = 640 * 360 * 3
         while True:
             proc = None
             try:
                 proc = await asyncio.create_subprocess_exec(core.FFMPEG, "-hide_banner", "-loglevel", "error", "-nostdin",
                     "-threads", "1", "-rtsp_transport", "tcp", "-rw_timeout", "5000000", "-i", core.GO_RTSP + "/" + cid,
-                    "-an", "-sn", "-vf", "fps=2,scale=640:360:force_original_aspect_ratio=decrease:flags=bilinear,pad=640:360:(ow-iw)/2:(oh-ih)/2",
+                    "-an", "-sn", "-vf", "fps=5,scale=640:360:force_original_aspect_ratio=decrease:flags=bilinear,pad=640:360:(ow-iw)/2:(oh-ih)/2",
                     "-pix_fmt", "bgr24", "-f", "rawvideo", "pipe:1", stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.DEVNULL, stdin=asyncio.subprocess.DEVNULL)
                 background = None
-                runtime["watching"] = True
-                runtime["error"] = ""
-                self.changed()
                 while True:
                     raw = await asyncio.wait_for(proc.stdout.readexactly(frame_size), timeout=15)
                     frame = np.frombuffer(raw, np.uint8).reshape(360, 640, 3).copy()
+                    now = int(time.time() * 1000)
+                    runtime["frames"] += 1
+                    runtime["last_frame"] = now
+                    if not runtime["watching"]:
+                        runtime["watching"] = True
+                        runtime["error"] = ""
+                        self.changed()
                     gray = cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (160, 90))
                     if background is None:
                         background = gray.astype(np.float32)
                         continue
-                    mask = cv2.absdiff(gray, cv2.convertScaleAbs(background)) > 20
+                    mask = cv2.absdiff(gray, cv2.convertScaleAbs(background)) > 25
                     cv2.accumulateWeighted(gray, background, .08)
-                    motion = bool(np.count_nonzero(mask) >= 45)
+                    sensitivity = int(self.cam_config(cid)["sensitivity"])
+                    area = (.012, .005, .002)[sensitivity]
+                    fraction = np.count_nonzero(mask) / mask.size
+                    if area < fraction < .6:
+                        runtime["motion_until"] = now + 3000
+                    motion = now < runtime["motion_until"]
                     if motion != runtime["motion"]:
                         runtime["motion"] = motion
                         self.changed()
-                    now = int(time.time() * 1000)
-                    if motion and now - runtime["last_infer"] >= 1000:
+                    if motion and now - runtime["last_queued"] >= 333:
                         self.pending[cid] = (frame, mask, now)
+                        runtime["last_queued"] = now
             except asyncio.CancelledError:
                 raise
             except (OSError, asyncio.TimeoutError, asyncio.IncompleteReadError) as exc:
@@ -221,6 +232,7 @@ class VisionAI:
                 self.inferences += 1
                 runtime = self.runtime[cid]
                 runtime["last_infer"] = at
+                runtime["inferences"] += 1
                 self.follow(cid, frame, mask, at, detections)
             self.expire()
 
@@ -346,12 +358,19 @@ class VisionAI:
 
     def state(self) -> dict:
         cams = {}
+        enabled_cams = [cid for cid, _ in self.vision.configured() if self.cam_config(cid)["detect"]]
+        admitted = set(enabled_cams[:int(self.config["max_cameras"])])
+        now = int(time.time() * 1000)
         for cid, cam in self.vision.configured():
             cfg = self.cam_config(cid)
             runtime = self.runtime.get(cid, {})
             cams[cid] = {"name": cam["name"], "detect": cfg["detect"], "sensitivity": cfg["sensitivity"],
                          "labels": {label: cfg[label] for label in LABELS}, "watching": runtime.get("watching", False),
                          "error": runtime.get("error", ""), "motion": runtime.get("motion", False),
+                         "frames": runtime.get("frames", 0), "inferences": runtime.get("inferences", 0),
+                         "last_frame": runtime.get("last_frame", 0), "last_infer": runtime.get("last_infer", 0),
+                         "limited": cfg["detect"] and cid not in admitted,
+                         "frame_age_s": round((now - runtime["last_frame"]) / 1000, 1) if runtime.get("last_frame") else None,
                          **{label: runtime.get("counts", {}).get(label, 0) for label in LABELS},
                          "active": [t["event"]["id"] for t in runtime.get("tracks", {}).values() if t["event"]],
                          "last": next((e for e in self.recent if e["cam"] == cid), None)}

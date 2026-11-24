@@ -22,7 +22,7 @@ Repository separato per installare **EAC Vision AI Home Assistant** dallo Store 
 - Impostazioni con spazio occupato, memoria e CPU del servizio; codice client breve o personalizzato; nomi delle camere nascondibili nel live.
 - Collegamento dei client da casa con IP locale/porta 8767, o fuori casa tramite Tailscale. DuckDNS richiede un proxy HTTPS che inoltri `/eacnvr/` e i WebSocket.
 
-L'AI non modifica i video H24. L'analisi usa un flusso video ridotto a 640×360, 2 fps e un solo lavoratore ONNX Runtime; se la memoria disponibile scende sotto 768 MB sospende temporaneamente l'analisi. La velocità e il numero di camere sostenibili dipendono dal mini PC, dai codec, dal bitrate e dal NAS. **Non è stata ancora verificata sul tuo HA reale**: prova inizialmente con una camera AI, poi aumenta gradualmente.
+L'AI non modifica i video H24. L'analisi usa un flusso video ridotto a 640×360, 5 fps (come la versione PC), con controllo del movimento e un solo lavoratore ONNX Runtime. Il riquadro di ogni camera mostra i fotogrammi ricevuti e le analisi effettuate: dopo un passaggio davanti alla camera, il contatore delle analisi deve aumentare. Se la memoria disponibile scende sotto 768 MB l'analisi si sospende temporaneamente. La velocità e il numero di camere sostenibili dipendono dal mini PC, dai codec, dal bitrate e dal NAS. **Non è stata ancora verificata sul tuo HA reale**: prova inizialmente con una camera AI, poi aumenta gradualmente.
 
 Gli eventi vengono conservati almeno 7 giorni nei dati dell'app, mentre le registrazioni seguono i giorni impostati per l'archivio. Il modello e la licenza Apache 2.0 di YOLOX sono inclusi in `eac_vision_ai/ai/`.
 
