@@ -3,7 +3,7 @@ FROM python:3.12-slim-bookworm
 ARG BUILD_ARCH
 RUN test "${BUILD_ARCH:-amd64}" = "amd64" \
     && apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg ca-certificates libglib2.0-0 \
+    && apt-get install -y --no-install-recommends ffmpeg ca-certificates libglib2.0-0 libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 RUN pip install --no-cache-dir aiohttp==3.13.2 numpy==2.3.3 onnxruntime==1.30.0 opencv-python-headless==5.0.0.93
 
