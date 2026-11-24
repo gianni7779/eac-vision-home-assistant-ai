@@ -1,5 +1,9 @@
 # Novità
 
+## 0.1.1
+
+- Aggiunto il flusso HLS/TS come alternativa al formato fMP4 per i client iPhone con camere H.264.
+
 ## 0.1.0
 
 - Prima edizione AI per mini PC amd64: stessa dashboard e registratore dell'edizione HA senza AI.

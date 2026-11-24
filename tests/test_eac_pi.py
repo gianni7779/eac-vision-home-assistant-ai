@@ -82,7 +82,7 @@ class VisionTest(unittest.IsolatedAsyncioTestCase):
         info = await response.json()
         self.assertEqual(info["app"], "EAC Vision NVR")
         self.assertEqual(info["name"], "EAC Vision AI Home Assistant")
-        self.assertEqual(info["version"], "0.1.0")
+        self.assertEqual(info["version"], "0.1.1")
         denied = await self.lan.get("/eacnvr/cameras", headers={"Origin": "http://localhost"})
         self.assertEqual(denied.status, 403)
         self.assertEqual(denied.headers.get("Access-Control-Allow-Origin"), "*")
@@ -159,6 +159,32 @@ class VisionTest(unittest.IsolatedAsyncioTestCase):
         self.assertIn('segment.m4s?id=ABCDEFGH&n=1&key=a-b_12345678', result)
         denied = await self.lan.get('/eacnvr/hls.m3u8?src=' + self.cid)
         self.assertEqual(denied.status, 403)
+
+    async def test_hls_supports_ios_mp4_and_ts_fallback(self):
+        class FakeResponse:
+            status = 200
+            headers = {"Content-Type": "application/vnd.apple.mpegurl"}
+            async def __aenter__(self):
+                return self
+            async def __aexit__(self, *_):
+                return False
+            async def read(self):
+                return b"#EXTM3U\n"
+        class FakeSession:
+            def __init__(self):
+                self.urls = []
+            def get(self, url):
+                self.urls.append(url)
+                return FakeResponse()
+        fake = FakeSession()
+        self.vision.session = fake
+        self.vision.relay = SimpleNamespace(returncode=None)
+        endpoint = f"/eacnvr/hls.m3u8?src={self.cid}&key={self.vision.client_key}"
+        self.assertEqual((await self.lan.get(endpoint)).status, 200)
+        self.assertTrue(fake.urls[-1].endswith("&mp4"))
+        self.assertEqual((await self.lan.get(endpoint + "&mode=ts")).status, 200)
+        self.assertTrue(fake.urls[-1].endswith("src=" + self.cid))
+        self.assertEqual((await self.lan.get(endpoint + "&mode=invalid")).status, 400)
 
     async def test_cleanup_removes_expired_recording(self):
         self.vision.set_storage(str(core.MEDIA / "nas"), 3, 0)

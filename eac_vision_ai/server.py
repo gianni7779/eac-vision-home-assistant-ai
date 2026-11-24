@@ -265,7 +265,10 @@ async def hls(request: web.Request) -> web.Response:
         cid = request.query.get("src", "")
         if cid not in v.sources:
             raise web.HTTPNotFound(text="Telecamera non trovata")
-        upstream_path = "/api/stream.m3u8?" + urlencode({"src": cid}) + "&mp4"
+        mode = request.query.get("mode", "mp4")
+        if mode not in {"mp4", "ts"}:
+            raise web.HTTPBadRequest(text="Formato HLS non valido")
+        upstream_path = "/api/stream.m3u8?" + urlencode({"src": cid}) + ("&mp4" if mode == "mp4" else "")
     assert v.session
     try:
         async with v.session.get(GO_API + upstream_path) as upstream:
