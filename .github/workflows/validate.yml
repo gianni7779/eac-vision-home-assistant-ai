@@ -1,0 +1,14 @@
+name: Validate AI add-on
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Home Assistant amd64 image
+        run: docker build --build-arg BUILD_ARCH=amd64 -t eac-vision-ai ./eac_vision_ai
+      - name: Load model and run one inference
+        run: docker run --rm --entrypoint python3 eac-vision-ai -c "import sys,numpy as np;sys.path.insert(0,'/opt/eac');from ai import Detector;d=Detector('/opt/eac/ai/yolox_tiny.onnx');assert d.infer(np.zeros((360,640,3),dtype=np.uint8))==[];print(d.device)"
