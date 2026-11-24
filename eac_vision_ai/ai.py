@@ -102,6 +102,7 @@ class VisionAI:
         self.event_root = core.DATA / "ai_events"
         self.inferences = 0
         self.avg_ms = 0.0
+        self.last_notify: dict[tuple[str, str, str], float] = {}
         self._load_recent()
 
     def cam_config(self, cid: str) -> dict:
@@ -334,9 +335,13 @@ class VisionAI:
         names = {"persona": "Persona", "veicolo": "Veicolo", "animale": "Animale"}
         for target, choice in list(self.config["notify"].items()):
             if choice.get("enabled") and event["label"] in choice.get("labels", []):
+                marker = (target, event.get("cam", ""), event["label"])
+                if time.monotonic() - self.last_notify.get(marker, -1e9) < 60:
+                    continue
                 try:
                     await self.send_notify(target, "EAC Vision · " + names[event["label"]],
                                            event["camName"] + " · rilevato alle " + datetime.fromtimestamp(event["start"] / 1000).strftime("%H:%M"))
+                    self.last_notify[marker] = time.monotonic()
                 except Exception as exc:
                     print("EAC Vision AI: notifica non inviata: " + type(exc).__name__, flush=True)
 

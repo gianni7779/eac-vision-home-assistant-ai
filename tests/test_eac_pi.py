@@ -267,6 +267,8 @@ class VisionTest(unittest.IsolatedAsyncioTestCase):
                                                     "start": int(time.time() * 1000)})
                 await self.vision.ai._notify_event({"label": "animale", "camName": "Ingresso",
                                                     "start": int(time.time() * 1000)})
+                await self.vision.ai._notify_event({"label": "persona", "camName": "Ingresso",
+                                                    "start": int(time.time() * 1000)})
                 self.assertEqual(len(sent), 2)
                 self.assertIn("Ingresso", sent[1]["message"])
         finally:
