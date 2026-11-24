@@ -65,7 +65,7 @@ async def client_auth(request: web.Request, handler):
             except web.HTTPException as exc:
                 response = exc
     response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
     response.headers["Cache-Control"] = "no-store"
     response.headers["Referrer-Policy"] = "no-referrer"
@@ -358,6 +358,35 @@ async def ai_image(request: web.Request) -> web.FileResponse:
     return web.FileResponse(path, headers={"Content-Type": "image/jpeg"})
 
 
+async def notify_settings(request: web.Request) -> web.Response:
+    detector = ai_of(request)
+    try:
+        if request.method == "POST":
+            body = await request.json()
+            if not isinstance(body, dict):
+                raise ValueError("Impostazioni notifiche non valide")
+            await detector.set_notify(body)
+        return web.json_response({"targets": await detector.notify_targets(),
+                                  "subscriptions": detector.config["notify"]})
+    except ValueError as exc:
+        raise web.HTTPBadRequest(text=str(exc)) from exc
+    except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError) as exc:
+        raise web.HTTPBadGateway(text="Dispositivi Home Assistant non disponibili") from exc
+
+
+async def notify_test(request: web.Request) -> web.Response:
+    detector = ai_of(request)
+    try:
+        body = await request.json()
+        target = str(body.get("target", ""))
+        await detector.send_notify(target, "EAC Vision · prova", "Le notifiche sono collegate correttamente.")
+        return web.json_response({"sent": True})
+    except ValueError as exc:
+        raise web.HTTPBadRequest(text=str(exc)) from exc
+    except (aiohttp.ClientError, asyncio.TimeoutError, RuntimeError) as exc:
+        raise web.HTTPBadGateway(text="Notifica di prova non inviata") from exc
+
+
 def make_ingress(v: Vision) -> web.Application:
     app = web.Application(middlewares=[ingress_only])
     app[VISION_KEY] = v
@@ -378,6 +407,9 @@ def make_ingress(v: Vision) -> web.Application:
     app.router.add_post("/api/ai/config", ai_set)
     app.router.add_get("/api/ai/events", ai_events)
     app.router.add_get("/api/ai/event/{event_id}.jpg", ai_image)
+    app.router.add_get("/api/ai/notify", notify_settings)
+    app.router.add_post("/api/ai/notify", notify_settings)
+    app.router.add_post("/api/ai/notify-test", notify_test)
     return app
 
 
@@ -398,6 +430,9 @@ def make_lan(v: Vision) -> web.Application:
     app.router.add_get("/eacnvr/state", nvr_state)
     app.router.add_get("/eacnvr/events", ai_events)
     app.router.add_get("/eacnvr/event.jpg", ai_image)
+    app.router.add_get("/eacnvr/notify", notify_settings)
+    app.router.add_post("/eacnvr/notify", notify_settings)
+    app.router.add_post("/eacnvr/notify-test", notify_test)
     app.router.add_route("OPTIONS", "/{path:.*}", nvr_info)
     return app
 

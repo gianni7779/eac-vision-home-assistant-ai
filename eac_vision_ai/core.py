@@ -1,4 +1,4 @@
-"""Home Assistant discovery, go2rtc relay and copy-only recording."""
+"""Home Assistant discovery, go2rtc relay and recording without video transcoding."""
 from __future__ import annotations
 
 import asyncio
@@ -28,7 +28,7 @@ GO_API = "http://127.0.0.1:11984"
 GO_RTSP = "rtsp://127.0.0.1:18554"
 MAX_CAMERAS = 16
 APP_NAME = "EAC Vision AI Home Assistant"
-APP_VERSION = "0.1.3"
+APP_VERSION = "0.1.4"
 FILE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.mp4$")
 
 
@@ -433,10 +433,11 @@ class Vision:
         if folder.is_symlink():
             raise OSError("Cartella telecamera non valida")
         folder.mkdir(exist_ok=True)
-        # A single upstream is shared by go2rtc with all live viewers and this copy-only recorder.
+        # Video copied without re-encoding; optional camera audio is encoded as MP4-compatible AAC.
         args = [FFMPEG, "-hide_banner", "-loglevel", "error", "-progress", "pipe:1", "-stats_period", "5",
                 "-rtsp_transport", "tcp", "-i", GO_RTSP + "/" + cid,
-                "-map", "0:v:0", "-c:v", "copy", "-an", "-f", "segment", "-segment_time", "300",
+                "-map", "0:v:0", "-map", "0:a:0?", "-c:v", "copy", "-c:a", "aac", "-b:a", "48k", "-ac", "1",
+                "-f", "segment", "-segment_time", "300",
                 "-segment_atclocktime", "1", "-reset_timestamps", "1", "-strftime", "1",
                 str(folder / "%Y-%m-%d_%H-%M-%S.mp4")]
         try:

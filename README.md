@@ -15,9 +15,10 @@ Repository separato per installare **EAC Vision AI Home Assistant** dallo Store 
 ## Funzioni
 
 - Dashboard delle camere selezionate, con fotogramma completo, vista singola, audio compatibile e schermo intero.
-- Live condiviso tramite go2rtc e registrazione continua H24 con copia del flusso, senza ricodificarlo. Timeline giornaliera con anteprima video mentre scegli l'ora.
+- Live condiviso tramite go2rtc e registrazione continua H24 senza ricodificare il video. Se la telecamera fornisce audio, viene incluso nei nuovi file MP4 in AAC. Timeline giornaliera con anteprima video, audio, velocità 0,5×–4× e zoom.
 - **YOLOX Tiny**, lo stesso modello ONNX della versione PC: riconosce persone, veicoli e animali dopo un controllo del movimento. Sensibilità e categorie regolabili per camera.
 - Eventi AI con istantanea, filtro per camera/tipo, segni colorati sulla barra delle registrazioni (persone arancione, animali verde, veicoli viola), collegamento alla registrazione, evento `eac_vision_ai` nel bus di Home Assistant per le automazioni e API compatibile con i client EAC Vision. Il modello è elaborato sulla CPU; il numero di camere AI contemporanee parte da 4 ed è configurabile fino a 16 in base alla potenza effettiva del mini PC.
+- Notifiche per persone, animali e veicoli anche con EAC Vision chiusa: nelle app iPhone/Android scegli il dispositivo `notify.mobile_app_*` di Home Assistant Companion, i tipi di evento e prova l'invio. Le notifiche arrivano tramite l'app Home Assistant installata sul telefono.
 - Registrazioni cancellate automaticamente: 3 giorni sulle nuove installazioni, pulizia ogni 5 minuti, limite GB facoltativo e riserva di spazio sul disco/NAS.
 - Impostazioni con spazio occupato, memoria e CPU del servizio; codice client breve o personalizzato; nomi delle camere nascondibili nel live.
 - Collegamento dei client da casa con IP locale/porta 8767, o fuori casa tramite Tailscale. DuckDNS richiede un proxy HTTPS che inoltri `/eacnvr/` e i WebSocket.

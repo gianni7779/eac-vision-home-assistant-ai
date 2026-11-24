@@ -7,6 +7,7 @@ import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import aiohttp
 from aiohttp import web, WSMsgType
@@ -228,6 +229,50 @@ class VisionTest(unittest.IsolatedAsyncioTestCase):
         detector.follow(self.cid, frame, motion, at + 400, person)
         self.assertEqual(len(detector.events()), 1)
         self.assertEqual(detector.events()[0]["label"], "persona")
+
+    async def test_companion_push_settings_and_delivery(self):
+        sent = []
+        async def services(_request):
+            return web.json_response([{"domain": "notify", "services": {"mobile_app_iphone": {}, "other": {}}}])
+        async def notify(request):
+            sent.append(await request.json())
+            return web.json_response([])
+        fake_app = web.Application()
+        fake_app.router.add_get("/api/services", services)
+        fake_app.router.add_post("/api/services/notify/mobile_app_iphone", notify)
+        fake = TestServer(fake_app)
+        await fake.start_server()
+        self.vision.ai = ai.VisionAI(self.vision)
+        self.vision.token = "test"
+        self.vision.session = aiohttp.ClientSession()
+        try:
+            with patch.object(core, "HA_REST", str(fake.make_url("/api")).rstrip("/")):
+                key = self.vision.client_key
+                denied = await self.lan.get("/eacnvr/notify")
+                self.assertEqual(denied.status, 403)
+                settings = await (await self.lan.get("/eacnvr/notify?key=" + key)).json()
+                self.assertEqual(settings["targets"], ["notify.mobile_app_iphone"])
+                invalid = await self.lan.post("/eacnvr/notify?key=" + key,
+                                              json={"target": "notify.other", "enabled": True, "labels": ["persona"]})
+                self.assertEqual(invalid.status, 400)
+                response = await self.lan.post("/eacnvr/notify?key=" + key,
+                                               json={"target": "notify.mobile_app_iphone", "enabled": True,
+                                                     "labels": ["persona"]})
+                self.assertEqual(response.status, 200, await response.text())
+                self.assertTrue((await response.json())["subscriptions"]["notify.mobile_app_iphone"]["enabled"])
+                test = await self.lan.post("/eacnvr/notify-test?key=" + key,
+                                           json={"target": "notify.mobile_app_iphone"})
+                self.assertEqual(test.status, 200, await test.text())
+                await self.vision.ai._notify_event({"label": "persona", "camName": "Ingresso",
+                                                    "start": int(time.time() * 1000)})
+                await self.vision.ai._notify_event({"label": "animale", "camName": "Ingresso",
+                                                    "start": int(time.time() * 1000)})
+                self.assertEqual(len(sent), 2)
+                self.assertIn("Ingresso", sent[1]["message"])
+        finally:
+            await self.vision.session.close()
+            self.vision.session = None
+            await fake.close()
 
     async def test_ai_timeline_reads_events_for_selected_day(self):
         self.vision.ai = ai.VisionAI(self.vision)

@@ -89,6 +89,7 @@ class VisionAI:
         self.config.setdefault("enabled", True)
         self.config.setdefault("max_cameras", 4)
         self.config.setdefault("cams", {})
+        self.config.setdefault("notify", {})
         self.detector: Detector | None = None
         self.status_text = "Avvio del modello AI…"
         self.rev = 1
@@ -291,7 +292,53 @@ class VisionAI:
         self.changed()
         if self.vision.session and self.vision.token:
             asyncio.create_task(self._send_ha_event(event))
+            if self.config["notify"]:
+                asyncio.create_task(self._notify_event(event))
         return event
+
+    async def notify_targets(self) -> list[str]:
+        if not self.vision.session or not self.vision.token:
+            raise RuntimeError("Home Assistant non collegato")
+        async with self.vision.session.get(core.HA_REST + "/services",
+                headers={"Authorization": "Bearer " + self.vision.token}) as response:
+            response.raise_for_status()
+            services = await response.json()
+        return sorted("notify." + name for domain in services if domain.get("domain") == "notify"
+                      for name in domain.get("services", {}) if name.startswith("mobile_app_"))
+
+    async def set_notify(self, body: dict) -> dict:
+        target = str(body.get("target", ""))
+        if target not in await self.notify_targets():
+            raise ValueError("Scegli un dispositivo Home Assistant Companion disponibile")
+        labels = body.get("labels", [])
+        if not isinstance(labels, list) or not labels or any(label not in LABELS for label in labels):
+            raise ValueError("Scegli almeno un tipo di evento")
+        if not isinstance(body.get("enabled"), bool):
+            raise ValueError("Stato notifiche non valido")
+        self.config["notify"][target] = {"enabled": body["enabled"], "labels": list(dict.fromkeys(labels))}
+        self.save()
+        return self.config["notify"][target]
+
+    async def send_notify(self, target: str, title: str, message: str) -> None:
+        if target not in await self.notify_targets():
+            raise ValueError("Dispositivo Home Assistant Companion non disponibile")
+        assert self.vision.session
+        service = target.removeprefix("notify.")
+        async with self.vision.session.post(core.HA_REST + "/services/notify/" + service,
+                json={"title": title, "message": message},
+                headers={"Authorization": "Bearer " + self.vision.token}) as response:
+            response.raise_for_status()
+            await response.read()
+
+    async def _notify_event(self, event: dict) -> None:
+        names = {"persona": "Persona", "veicolo": "Veicolo", "animale": "Animale"}
+        for target, choice in list(self.config["notify"].items()):
+            if choice.get("enabled") and event["label"] in choice.get("labels", []):
+                try:
+                    await self.send_notify(target, "EAC Vision · " + names[event["label"]],
+                                           event["camName"] + " · rilevato alle " + datetime.fromtimestamp(event["start"] / 1000).strftime("%H:%M"))
+                except Exception as exc:
+                    print("EAC Vision AI: notifica non inviata: " + type(exc).__name__, flush=True)
 
     async def _send_ha_event(self, event: dict):
         try:

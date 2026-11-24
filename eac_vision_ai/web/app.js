@@ -622,8 +622,20 @@ $('playback').addEventListener('loadedmetadata',()=>{
   const video=$('playback');
   if(recordingIndex<0)return;
   if(Number.isFinite(video.duration))video.currentTime=Math.min(pendingSeek,Math.max(0,video.duration-.1));
+  video.playbackRate=Number($('record-speed').value);
   video.play().catch(()=>{});
 });
+$('record-audio').addEventListener('click',()=>{
+  const video=$('playback');video.muted=!video.muted;
+  $('record-audio').textContent=video.muted?'🔇 Muto':'🔊 Audio';
+  $('record-audio').setAttribute('aria-pressed',String(!video.muted));
+});
+$('record-speed').addEventListener('change',()=>{$('playback').playbackRate=Number($('record-speed').value)});
+let recordingZoom=1;
+function setRecordingZoom(value){recordingZoom=Math.max(1,Math.min(4,value));$('playback').style.transform='scale('+recordingZoom+')'}
+$('record-zoom-in').addEventListener('click',()=>setRecordingZoom(recordingZoom+.5));
+$('record-zoom-out').addEventListener('click',()=>setRecordingZoom(recordingZoom-.5));
+$('record-zoom-reset').addEventListener('click',()=>setRecordingZoom(1));
 $('playback').addEventListener('timeupdate',()=>{
   if(recordingIndex>=0)updatePlaybackPosition(clipClock(recordingSegments[recordingIndex])+$('playback').currentTime);
 });
