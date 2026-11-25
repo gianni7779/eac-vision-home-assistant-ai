@@ -10,10 +10,12 @@ import time
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import parse_qs, quote, urlsplit, urlunsplit
 
 import cv2
 import numpy as np
 import onnxruntime as ort
+import aiohttp
 
 import core
 
@@ -46,6 +48,26 @@ def ai_ffmpeg_args(url: str) -> list[str]:
             "-map", "0:v:0", "-an", "-sn", "-vf",
             "fps=5,scale=640:360:force_original_aspect_ratio=decrease:flags=bilinear,pad=640:360:(ow-iw)/2:(oh-ih)/2",
             "-pix_fmt", "bgr24", "-threads:v", "1", "-f", "rawvideo", "pipe:1"]
+
+
+def substream_source(source: str, discovered: dict) -> str | None:
+    """Use only an explicitly named secondary ONVIF profile."""
+    base = urlsplit(source)
+    current = parse_qs(base.query).get("subtype", [""])[0]
+    if base.scheme != "onvif" or not current or not isinstance(discovered, dict):
+        return None
+    for item in discovered.get("sources", []):
+        if not isinstance(item, dict):
+            continue
+        candidate = urlsplit(str(item.get("url", "")))
+        token = parse_qs(candidate.query).get("subtype", [""])[0]
+        if (candidate.scheme, candidate.netloc, candidate.path) != (base.scheme, base.netloc, base.path):
+            continue
+        if not token or token == current or "snapshot" in candidate.query:
+            continue
+        if re.search(r"(?i)(?:sub|low|secondary)", token):
+            return urlunsplit((base.scheme, base.netloc, base.path, "subtype=" + quote(token, safe=""), ""))
+    return None
 
 
 def iou(a: list[float], b: list[float]) -> float:
@@ -120,6 +142,10 @@ class VisionAI:
         self.change = asyncio.Event()
         self.pending: dict[str, tuple[np.ndarray, np.ndarray, int]] = {}
         self.watchers: dict[str, asyncio.Task] = {}
+        self.watch_inputs: dict[str, str] = {}
+        self.low_streams: dict[str, str] = {}
+        self.low_retry_at: dict[str, float] = {}
+        self.low_relay = None
         self.tasks: list[asyncio.Task] = []
         self.runtime: dict[str, dict] = {}
         self.recent: list[dict] = []
@@ -145,6 +171,7 @@ class VisionAI:
         self.change = asyncio.Event()
 
     async def start(self):
+        cv2.setNumThreads(1)
         try:
             self.detector = await asyncio.to_thread(Detector, MODEL)
             self.status_text = "AI attiva: " + self.detector.device
@@ -152,7 +179,7 @@ class VisionAI:
             self.status_text = "Modello AI non disponibile: " + type(exc).__name__
         self.changed()
         self.tasks = [asyncio.create_task(self.reconcile()), asyncio.create_task(self.worker()),
-                      asyncio.create_task(self.cleanup())]
+                      asyncio.create_task(self.cleanup()), asyncio.create_task(self.optimize_sources())]
 
     async def stop(self):
         for task in self.tasks:
@@ -164,24 +191,98 @@ class VisionAI:
 
     async def reconcile(self):
         while True:
+            if self.low_relay is not self.vision.relay:
+                self.low_relay = self.vision.relay
+                self.low_streams.clear()
+                self.low_retry_at.clear()
+            for cid in list(self.low_streams):
+                if cid in self.vision.record_errors:
+                    self.low_streams.pop(cid, None)
+                    self.low_retry_at[cid] = time.monotonic() + 3600
             enough_memory = (core.memory_available_mb() or 9999) >= 768
             ready = self.config["enabled"] and self.detector and self.vision.relay and self.vision.relay.returncode is None and enough_memory
             wanted = [cid for cid, _ in self.vision.configured() if self.cam_config(cid)["detect"]][:int(self.config["max_cameras"])] if ready else []
             for cid in list(self.watchers):
-                if cid not in wanted or self.watchers[cid].done():
-                    self.watchers[cid].cancel()
+                selected = self.low_streams.get(cid, cid)
+                if cid not in wanted or self.watchers[cid].done() or self.watch_inputs.get(cid) != selected:
+                    task = self.watchers[cid]
+                    task.cancel()
+                    await asyncio.gather(task, return_exceptions=True)
                     self.watchers.pop(cid, None)
+                    self.watch_inputs.pop(cid, None)
                     self.pending.pop(cid, None)
             for cid in wanted:
                 if cid not in self.watchers:
-                    self.watchers[cid] = asyncio.create_task(self.watch(cid))
+                    selected = self.low_streams.get(cid, cid)
+                    self.watch_inputs[cid] = selected
+                    self.watchers[cid] = asyncio.create_task(self.watch(cid, selected))
             if self.detector and not enough_memory:
                 self.status_text = "AI sospesa: meno di 768 MB liberi"
             elif self.detector and self.status_text.startswith("AI sospesa"):
                 self.status_text = "AI attiva: " + self.detector.device
             await asyncio.sleep(5)
 
-    async def watch(self, cid: str):
+    async def optimize_sources(self) -> None:
+        """Try a camera's smaller ONVIF profile without touching live or H24 recording."""
+        while True:
+            relay = self.vision.relay
+            if (self.config["enabled"] and self.detector and self.vision.session and relay
+                    and relay.returncode is None):
+                ids = [cid for cid, _ in self.vision.configured() if self.cam_config(cid)["detect"]]
+                for cid in ids[:int(self.config["max_cameras"])]:
+                    if cid in self.low_streams or time.monotonic() < self.low_retry_at.get(cid, 0):
+                        continue
+                    self.low_retry_at[cid] = time.monotonic() + 3600
+                    try:
+                        await self.try_low_stream(cid)
+                    except (OSError, ValueError, TypeError, asyncio.TimeoutError, aiohttp.ClientError):
+                        pass
+            await asyncio.sleep(30)
+
+    async def try_low_stream(self, cid: str) -> None:
+        source = self.vision.sources.get(cid, "")
+        base = urlsplit(source)
+        if base.scheme != "onvif":
+            return
+        base_url = urlunsplit((base.scheme, base.netloc, base.path, "", ""))
+        timeout = aiohttp.ClientTimeout(total=8)
+        async with self.vision.session.get(core.GO_API + "/api/onvif", params={"src": base_url}, timeout=timeout) as response:
+            if response.status != 200:
+                return
+            candidate = substream_source(source, await response.json())
+        if not candidate:
+            return
+        name = "ai_" + cid
+        async with self.vision.session.put(core.GO_API + "/api/streams",
+                params={"name": name, "src": candidate}, timeout=timeout) as response:
+            if response.status not in (200, 201, 204):
+                return
+        probe = str(Path(core.FFMPEG).with_name("ffprobe"))
+        if not Path(probe).is_file():
+            return
+        proc = await asyncio.create_subprocess_exec(probe, "-v", "error", "-rtsp_transport", "tcp",
+            "-i", core.GO_RTSP + "/" + name + "?video", "-select_streams", "v:0",
+            "-show_entries", "stream=width,height", "-of", "json",
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+        try:
+            output, _ = await asyncio.wait_for(proc.communicate(), 12)
+        except (asyncio.TimeoutError, asyncio.CancelledError) as exc:
+            proc.kill()
+            await proc.wait()
+            if isinstance(exc, asyncio.CancelledError):
+                raise
+            return
+        if proc.returncode:
+            return
+        streams = json.loads(output).get("streams", [])
+        if not isinstance(streams, list) or not streams or not isinstance(streams[0], dict):
+            return
+        width, height = int(streams[0].get("width", 0)), int(streams[0].get("height", 0))
+        if width >= 640 and height >= 360 and width * height <= 1280 * 720:
+            self.low_streams[cid] = name
+            self.changed()
+
+    async def watch(self, cid: str, stream_name: str):
         runtime = self.runtime.setdefault(cid, {"motion": False, "counts": dict.fromkeys(LABELS, 0),
                                                "tracks": {}, "error": "", "watching": False, "last_infer": 0,
                                                "motion_until": 0, "last_queued": 0, "frames": 0,
@@ -192,13 +293,13 @@ class VisionAI:
             stderr_task = None
             error_chunks: list[str] = []
             try:
-                proc = await asyncio.create_subprocess_exec(*ai_ffmpeg_args(core.GO_RTSP + "/" + cid + "?video"), stdout=asyncio.subprocess.PIPE,
+                proc = await asyncio.create_subprocess_exec(*ai_ffmpeg_args(core.GO_RTSP + "/" + stream_name + "?video"), stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE, stdin=asyncio.subprocess.DEVNULL)
                 stderr_task = asyncio.create_task(collect_ffmpeg_errors(proc.stderr, error_chunks))
                 background = None
                 while True:
                     raw = await asyncio.wait_for(proc.stdout.readexactly(frame_size), timeout=15)
-                    frame = np.frombuffer(raw, np.uint8).reshape(360, 640, 3).copy()
+                    frame = np.frombuffer(raw, np.uint8).reshape(360, 640, 3)
                     now = int(time.time() * 1000)
                     runtime["frames"] += 1
                     runtime["last_frame"] = now
@@ -222,7 +323,7 @@ class VisionAI:
                         runtime["motion"] = motion
                         self.changed()
                     if motion and now - runtime["last_queued"] >= 333:
-                        self.pending[cid] = (frame, mask, now)
+                        self.pending[cid] = (frame.copy(), mask, now)
                         runtime["last_queued"] = now
             except asyncio.CancelledError:
                 raise
@@ -237,6 +338,10 @@ class VisionAI:
                 runtime["watching"] = False
                 runtime["motion"] = False
                 self.changed()
+                if stream_name != cid:
+                    self.low_streams.pop(cid, None)
+                    self.low_retry_at[cid] = time.monotonic() + 3600
+                    return
             finally:
                 if proc and proc.returncode is None:
                     proc.kill()
@@ -476,6 +581,7 @@ class VisionAI:
             cams[cid] = {"name": cam["name"], "detect": cfg["detect"], "sensitivity": cfg["sensitivity"],
                          "labels": {label: cfg[label] for label in LABELS}, "watching": runtime.get("watching", False),
                          "error": runtime.get("error", ""), "motion": runtime.get("motion", False),
+                         "source": "Profilo ONVIF leggero" if cid in self.low_streams else "Profilo principale",
                          "frames": runtime.get("frames", 0), "inferences": runtime.get("inferences", 0),
                          "last_frame": runtime.get("last_frame", 0), "last_infer": runtime.get("last_infer", 0),
                          "limited": cfg["detect"] and cid not in admitted,

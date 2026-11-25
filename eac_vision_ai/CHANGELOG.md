@@ -1,5 +1,11 @@
 # Novità
 
+## 0.1.8
+
+- Quando la camera offre un profilo ONVIF secondario compatibile, l'AI lo usa per ridurre il lavoro di decodifica; il live e le registrazioni H24 restano sul flusso principale.
+- Il profilo leggero viene provato prima dell'uso. Se si interrompe o se la registrazione segnala un errore, l'analisi torna automaticamente al flusso principale.
+- Meno copie di fotogrammi quando non c'è movimento e un solo thread OpenCV per limitare i picchi di CPU.
+
 ## 0.1.7
 
 - Il lettore AI richiede solo la traccia video al relay e usa un singolo thread anche per l'uscita FFmpeg; eliminato un timeout I/O ridondante che poteva chiudere il flusso.

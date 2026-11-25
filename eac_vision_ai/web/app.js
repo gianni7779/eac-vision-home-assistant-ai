@@ -467,7 +467,7 @@ async function loadAISettings(){
       const heading=document.createElement('strong');heading.textContent=cam.name;box.append(heading);
       const small=document.createElement('small');
       let aiStatus=!cam.detect?'Rilevamento disattivato':cam.limited?'Fuori dal limite delle camere AI: aumenta «Telecamere analizzate insieme»':cam.error||(!cam.watching?'In attesa del video':cam.frame_age_s>5?'Video fermo da '+Math.round(cam.frame_age_s)+' s':cam.motion?'Movimento rilevato: analisi in corso':'In attesa di movimento');
-      if(cam.watching)aiStatus+=` · ${cam.frames} fotogrammi · ${cam.inferences} analisi · ${cam.persona} persone nel fotogramma`;
+      if(cam.watching)aiStatus+=` · ${cam.frames} fotogrammi · ${cam.inferences} analisi · ${cam.persona} persone nel fotogramma · ${cam.source||'Profilo principale'}`;
       small.textContent=aiStatus;box.append(small);
       const options=document.createElement('div');options.className='ai-camera-options';
       for(const [field,label] of [['detect','Rileva'],['persona','Persone'],['veicolo','Veicoli'],['animale','Animali']]){
