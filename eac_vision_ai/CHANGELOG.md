@@ -1,5 +1,11 @@
 # Novità
 
+## 0.1.10
+
+- I segmenti MP4 vengono chiusi ogni 30 secondi, così un evento recente compare nelle registrazioni molto prima rispetto ai precedenti 5 minuti. La durata effettiva dipende dai fotogrammi chiave della camera.
+- Il pulsante «Registrazione» di un evento aspetta il segmento corretto e lo apre automaticamente quando è pronto, senza riprodurre un video precedente.
+- Impostazioni e client NVR indicano se i file registrati contengono una traccia audio. Quando manca, occorre abilitare l'audio nel profilo ONVIF della telecamera.
+
 ## 0.1.9
 
 - La scelta del video leggero per l'AI prova anche i profili ONVIF con nomi generici come `profile_2`, verificandone la risoluzione prima di usarli. Questo aiuta le telecamere che non chiamano il flusso secondario `subStream`.

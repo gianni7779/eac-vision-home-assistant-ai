@@ -28,7 +28,7 @@ GO_API = "http://127.0.0.1:11984"
 GO_RTSP = "rtsp://127.0.0.1:18554"
 MAX_CAMERAS = 16
 APP_NAME = "EAC Vision AI Home Assistant"
-APP_VERSION = "0.1.9"
+APP_VERSION = "0.1.10"
 FILE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.mp4$")
 
 
@@ -171,6 +171,7 @@ class Vision:
         self._usage_at = 0.0
         self._usage_bytes = 0
         self._cpu_sample: tuple[float, int] | None = None
+        self._audio_cache: dict[str, tuple[float, bool | None]] = {}
 
     def set_client_key(self, value: str) -> None:
         if not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", value):
@@ -437,7 +438,7 @@ class Vision:
         args = [FFMPEG, "-hide_banner", "-loglevel", "error", "-progress", "pipe:1", "-stats_period", "5",
                 "-rtsp_transport", "tcp", "-i", GO_RTSP + "/" + cid,
                 "-map", "0:v:0", "-map", "0:a:0?", "-c:v", "copy", "-c:a", "aac", "-b:a", "48k", "-ac", "1",
-                "-f", "segment", "-segment_time", "300",
+                "-f", "segment", "-segment_time", "30",
                 "-segment_atclocktime", "1", "-reset_timestamps", "1", "-strftime", "1",
                 str(folder / "%Y-%m-%d_%H-%M-%S.mp4")]
         try:
@@ -571,6 +572,27 @@ class Vision:
     def days(self, cid: str) -> list[dict]:
         return [{"day": day} for day in sorted({p.name[:10] for p in self.completed_recording_files(cid)}, reverse=True)]
 
+    def recorded_audio(self, cid: str) -> bool | None:
+        """Check the MP4 track table in a completed file, at most once a minute."""
+        cached = self._audio_cache.get(cid)
+        if cached and time.monotonic() - cached[0] < 60:
+            return cached[1]
+        result = None
+        try:
+            files = self.completed_recording_files(cid)
+            if files:
+                path = files[-1]
+                with path.open("rb") as video:
+                    video.seek(max(0, path.stat().st_size - 1024 * 1024))
+                    tail = video.read()
+                moov = tail.rfind(b"moov")
+                if moov >= 0:
+                    result = b"soun" in tail[moov:]
+        except OSError:
+            pass
+        self._audio_cache[cid] = (time.monotonic(), result)
+        return result
+
     async def cleanup_loop(self) -> None:
         while True:
             try:
@@ -617,6 +639,7 @@ class Vision:
                 "motion_entity": cam.get("motion_entity", ""), "motion": self.states.get(cam.get("motion_entity", ""), {}).get("state") == "on",
                 "recording": cid in self.recorders and self.recorders[cid].returncode is None,
                 "record_error": self.record_errors.get(cid, ""),
+                "recorded_audio": self.recorded_audio(cid) if cam.get("mode") != "off" else None,
                 "selected": cid in self.config["selected"]}
 
     def status(self, include_key: bool = False) -> dict:

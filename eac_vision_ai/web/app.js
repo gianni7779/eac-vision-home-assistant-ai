@@ -8,6 +8,7 @@ let recordingSegments = [], recordingEvents = [], recordingIndex = -1, pendingSe
 let previewIndex = -1, previewOffset = 0, previewLast = 0, previewDragging = false, previewSecond = 0, skipTimelineClick = false;
 let detailCamId = null, detailPlayer = null, detailCams = [], detailAudioAvailable = false, detailAudioChecked = false, detailAudioOn = false, preferredRecordingCam = null;
 let aiState = null, eventCursor = 0, preferredRecordingDay = null, preferredRecordingSecond = null;
+let eventRetryTimer = 0, eventRetryDeadline = 0;
 let budget = Number(localStorage.getItem('eac-live-budget') || '4');
 if (![4, 8, 16].includes(budget)) budget = 4;
 $('live-budget').value = String(budget);
@@ -267,6 +268,8 @@ function renderSettings() {
     const bottom=document.createElement('div');bottom.className='camera-item-bottom';
     const detail=document.createElement('span');detail.className='muted';detail.textContent=cam.mode==='continuous'?'Registrazione continua':cam.mode==='motion'?'Registrazione al movimento':'Solo visione';bottom.append(detail);
     const button=document.createElement('button');button.textContent='Configura';button.addEventListener('click',()=>openCamera(cam));bottom.append(button);card.append(bottom);list.append(card);
+    if(cam.recorded_audio===false){const warning=document.createElement('small');warning.className='state';warning.textContent='Audio assente nel flusso ONVIF: attiva il microfono della telecamera e il profilo ONVIF con audio.';card.append(warning)}
+    if(cam.recorded_audio===true){const audio=document.createElement('small');audio.className='state ok';audio.textContent='Audio incluso nelle registrazioni';card.append(audio)}
     if(cam.record_error){const warning=document.createElement('small');warning.className='state';warning.textContent=cam.record_error;card.append(warning)}
   }
   if(!storageDirty){$('storage-path').value=state.storage.path||'';$('retention-days').value=state.retention_days;$('max-gb').value=state.max_gb}
@@ -431,6 +434,9 @@ async function loadRecordings() {
     const previous=preferredRecordingDay||daySelect.value;daySelect.replaceChildren();
     for(const item of days){const opt=document.createElement('option');opt.value=item.day;opt.textContent=item.day;daySelect.append(opt)}
     if([...daySelect.options].some(o=>o.value===previous))daySelect.value=previous;
+    if(preferredRecordingSecond!=null && previous && daySelect.value!==previous){
+      $('record-summary').textContent='Il video dell’evento è in preparazione…';scheduleEventRecordingRetry();return;
+    }
     preferredRecordingDay=null;
     await loadSegments();
   }catch(error){if(token===recordingLoad)showRecordingState('Impossibile caricare i giorni: '+error.message)}
@@ -448,9 +454,14 @@ async function loadSegments() {
     if(token!==recordingLoad)return;
     recordingSegments=segments.filter(s=>!s.live&&Number(s.dur)>0).sort((a,b)=>clipClock(a)-clipClock(b));
     recordingEvents=events;
-    if(!recordingSegments.length){showRecordingState('Nessuna registrazione completata in questo giorno. Aggiorna tra qualche minuto.');return}
+    if(!recordingSegments.length){showRecordingState(preferredRecordingSecond!=null?'Il video dell’evento è in preparazione…':'Nessuna registrazione completata in questo giorno.');if(preferredRecordingSecond!=null)scheduleEventRecordingRetry();return}
     renderRecordingTimeline();
-    if(preferredRecordingSecond!=null){const second=preferredRecordingSecond;preferredRecordingSecond=null;seekRecording(second)}
+    if(preferredRecordingSecond!=null){
+      const second=preferredRecordingSecond;
+      const match=recordingSegments.find(s=>clipClock(s)<=second+5&&clipClock(s)+s.dur>second+5);
+      if(match){preferredRecordingSecond=null;clearTimeout(eventRetryTimer);seekRecording(Math.max(second,clipClock(match)))}
+      else{$('record-summary').textContent='Il video dell’evento è in preparazione…';scheduleEventRecordingRetry()}
+    }
   }catch(error){if(token===recordingLoad)showRecordingState('Impossibile caricare le registrazioni: '+error.message)}
 }
 
@@ -511,11 +522,17 @@ async function loadEvents(more=false){
   }catch(error){$('events-status').textContent='Impossibile caricare gli eventi: '+error.message}
 }
 function openEventRecording(ev){
-  const at=new Date(ev.start-5000);
+  const at=new Date(ev.start);
   preferredRecordingCam=ev.cam;
   preferredRecordingDay=[at.getFullYear(),String(at.getMonth()+1).padStart(2,'0'),String(at.getDate()).padStart(2,'0')].join('-');
-  preferredRecordingSecond=at.getHours()*3600+at.getMinutes()*60+at.getSeconds();
+  preferredRecordingSecond=Math.max(0,at.getHours()*3600+at.getMinutes()*60+at.getSeconds()-5);
+  clearTimeout(eventRetryTimer);eventRetryDeadline=Date.now()+90000;
   setPage('recordings');
+}
+function scheduleEventRecordingRetry(){
+  clearTimeout(eventRetryTimer);
+  if(Date.now()>=eventRetryDeadline){preferredRecordingSecond=null;toast('Video ancora non disponibile. Riprova tra poco.');return}
+  eventRetryTimer=setTimeout(()=>{if(page==='recordings'&&preferredRecordingSecond!=null)loadRecordings()},3000);
 }
 
 document.querySelectorAll('.nav').forEach(el=>el.addEventListener('click',()=>setPage(el.dataset.page)));

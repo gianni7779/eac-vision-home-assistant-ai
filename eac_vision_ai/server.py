@@ -288,7 +288,8 @@ async def nvr_cameras(request: web.Request) -> web.Response:
     v = vision(request)
     cams = [{"id": cid, "name": cam.get("name", cid), "sub": False, "snapshot": True, "mjpeg": False,
              "convert": False, "recorded": cam.get("mode") != "off" and bool(v.storage_root(require_space=False)),
-             "recording": cid in v.recorders and v.recorders[cid].returncode is None}
+             "recording": cid in v.recorders and v.recorders[cid].returncode is None,
+             "recordedAudio": v.recorded_audio(cid)}
             for cid, cam in v.configured()]
     return web.json_response({"name": APP_NAME, "cams": cams, "mosaic": False})
 
