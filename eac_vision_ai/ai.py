@@ -460,13 +460,17 @@ class VisionAI:
         self.save()
         return self.config["notify"][target]
 
-    async def send_notify(self, target: str, title: str, message: str) -> None:
+    async def send_notify(self, target: str, title: str, message: str, camera_id: str = "") -> None:
         if target not in await self.notify_targets():
             raise ValueError("Dispositivo Home Assistant Companion non disponibile")
         assert self.vision.session
         service = target.removeprefix("notify.")
+        payload = {"title": title, "message": message}
+        if re.fullmatch(r"cam_[0-9a-f]{12}", camera_id):
+            link = "eacvision://live?cam=" + camera_id
+            payload["data"] = {"url": link, "clickAction": "deep-link://" + link}
         async with self.vision.session.post(core.HA_REST + "/services/notify/" + service,
-                json={"title": title, "message": message},
+                json=payload,
                 headers={"Authorization": "Bearer " + self.vision.token}) as response:
             response.raise_for_status()
             await response.read()
@@ -480,7 +484,7 @@ class VisionAI:
                     continue
                 try:
                     await self.send_notify(target, "EAC Vision · " + names[event["label"]],
-                                           event["camName"] + " · rilevato alle " + datetime.fromtimestamp(event["start"] / 1000).strftime("%H:%M"))
+                                           event["camName"] + " · rilevato alle " + datetime.fromtimestamp(event["start"] / 1000).strftime("%H:%M"), event["cam"])
                     self.last_notify[marker] = time.monotonic()
                 except Exception as exc:
                     print("EAC Vision AI: notifica non inviata: " + type(exc).__name__, flush=True)

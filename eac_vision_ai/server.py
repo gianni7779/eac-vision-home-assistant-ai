@@ -232,6 +232,14 @@ async def recordings(request: web.Request) -> web.Response:
     return web.json_response(vision(request).segments(cid, day))
 
 
+async def recording_noise(request: web.Request) -> web.Response:
+    cid = cid_of(request)
+    day = request.query.get("day", "")
+    if not DAY_RE.fullmatch(day):
+        raise web.HTTPBadRequest(text="Giorno non valido")
+    return web.json_response(vision(request).noise.day(cid, day))
+
+
 async def recording_days(request: web.Request) -> web.Response:
     return web.json_response(vision(request).days(cid_of(request)))
 
@@ -402,6 +410,7 @@ def make_ingress(v: Vision) -> web.Application:
     app.router.add_get("/api/snapshot/{cid}", snapshot)
     app.router.add_get("/api/live/{cid}", relay_live)
     app.router.add_get("/api/recordings/{cid}", recordings)
+    app.router.add_get("/api/noise/{cid}", recording_noise)
     app.router.add_get("/api/days/{cid}", recording_days)
     app.router.add_get("/api/recording/{cid}/{filename}", recording_file)
     app.router.add_get("/api/ai/state", nvr_state)
@@ -426,6 +435,7 @@ def make_lan(v: Vision) -> web.Application:
     app.router.add_get("/eacnvr/snapshot", snapshot)
     app.router.add_get("/eacnvr/days", nvr_days)
     app.router.add_get("/eacnvr/segments", nvr_segments)
+    app.router.add_get("/eacnvr/noise", recording_noise)
     app.router.add_get("/eacnvr/recent", nvr_recent)
     app.router.add_get("/eacnvr/file", recording_file)
     app.router.add_get("/eacnvr/state", nvr_state)

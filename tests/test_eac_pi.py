@@ -62,6 +62,7 @@ class VisionTest(unittest.IsolatedAsyncioTestCase):
         self.entries_path.write_text(json.dumps({"data": {"entries": [self.entry]}}), encoding="utf-8")
 
     async def asyncTearDown(self):
+        await self.vision.noise.stop()
         await self.lan.close()
         await self.ingress.close()
         self.temp.cleanup()
@@ -214,6 +215,23 @@ class VisionTest(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(old.exists())
         self.assertTrue(new.exists())
 
+    async def test_noise_index_is_available_to_web_and_iphone(self):
+        self.vision.set_storage(str(core.MEDIA / "nas"), 3, 0)
+        folder = core.MEDIA / "nas" / self.cid
+        folder.mkdir()
+        name = "2026-11-25_12-00-00.mp4"
+        (folder / name).write_bytes(b"completed")
+        self.vision.noise.day(self.cid, "2026-11-25")
+        self.vision.noise.db.execute("INSERT INTO levels(cam,name,peak) VALUES(?,?,?)", (self.cid, name, -19.5))
+        self.vision.noise.db.commit()
+        local = await self.ingress.get(f"/api/noise/{self.cid}?day=2026-11-25")
+        remote = await self.lan.get(f"/eacnvr/noise?cam={self.cid}&day=2026-11-25&key={self.vision.client_key}")
+        self.assertEqual(local.status, 200)
+        self.assertEqual(remote.status, 200)
+        self.assertEqual((await local.json())[0]["peak_db"], -19.5)
+        self.assertEqual(await remote.json(), await local.json())
+        self.assertEqual((await self.ingress.get(f"/api/noise/{self.cid}?day=wrong")).status, 400)
+
     async def test_ai_config_events_and_snapshot(self):
         self.vision.ai = ai.VisionAI(self.vision)
         self.assertEqual(self.vision.ai.config["max_cameras"], 4)
@@ -277,14 +295,15 @@ class VisionTest(unittest.IsolatedAsyncioTestCase):
                 test = await self.lan.post("/eacnvr/notify-test?key=" + key,
                                            json={"target": "notify.mobile_app_iphone"})
                 self.assertEqual(test.status, 200, await test.text())
-                await self.vision.ai._notify_event({"label": "persona", "camName": "Ingresso",
+                await self.vision.ai._notify_event({"label": "persona", "cam": self.cid, "camName": "Ingresso",
                                                     "start": int(time.time() * 1000)})
-                await self.vision.ai._notify_event({"label": "animale", "camName": "Ingresso",
+                await self.vision.ai._notify_event({"label": "animale", "cam": self.cid, "camName": "Ingresso",
                                                     "start": int(time.time() * 1000)})
-                await self.vision.ai._notify_event({"label": "persona", "camName": "Ingresso",
+                await self.vision.ai._notify_event({"label": "persona", "cam": self.cid, "camName": "Ingresso",
                                                     "start": int(time.time() * 1000)})
                 self.assertEqual(len(sent), 2)
                 self.assertIn("Ingresso", sent[1]["message"])
+                self.assertEqual(sent[1]["data"]["url"], "eacvision://live?cam=" + self.cid)
         finally:
             await self.vision.session.close()
             self.vision.session = None

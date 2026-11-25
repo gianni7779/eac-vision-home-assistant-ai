@@ -4,7 +4,7 @@ const $ = id => document.getElementById(id);
 const base = location.pathname.endsWith('/') ? location.pathname : location.pathname + '/';
 const apiUrl = path => base + path;
 let state = null, page = 'live', players = [], visibleIds = '', selectedCam = null, toastTimer = 0, hideTimer = 0, storageDirty = false;
-let recordingSegments = [], recordingEvents = [], recordingIndex = -1, pendingSeek = 0, recordingLoad = 0;
+let recordingSegments = [], recordingEvents = [], recordingNoise = [], recordingIndex = -1, pendingSeek = 0, recordingLoad = 0;
 let previewIndex = -1, previewOffset = 0, previewLast = 0, previewDragging = false, previewSecond = 0, skipTimelineClick = false;
 let detailCamId = null, detailPlayer = null, detailCams = [], detailAudioAvailable = false, detailAudioChecked = false, detailAudioOn = false, preferredRecordingCam = null;
 let aiState = null, eventCursor = 0, preferredRecordingDay = null, preferredRecordingSecond = null;
@@ -318,11 +318,12 @@ function stopRecordingPlayback() {
   for(const button of $('record-hours').children)button.classList.remove('active');
 }
 function showRecordingState(message) {
-  recordingSegments=[];recordingEvents=[];stopRecordingPlayback();
+  recordingSegments=[];recordingEvents=[];recordingNoise=[];stopRecordingPlayback();
   $('record-count').textContent='Nessun video';
   $('record-summary').textContent=message;
   $('timeline-coverage').replaceChildren();
   $('timeline-events').replaceChildren();
+  $('timeline-noise').replaceChildren();
   $('record-hours').replaceChildren();
   $('record-day-label').textContent=$('record-day').value||'Nessuna data';
 }
@@ -348,6 +349,7 @@ function renderRecordingTimeline() {
     bar.style.left=(start/86400*100)+'%';bar.style.width=((end-start)/86400*100)+'%';coverage.append(bar);
   }
   const events=$('timeline-events');events.replaceChildren();
+  renderNoiseTimeline();
   for(const event of recordingEvents){
     if(!['persona','animale','veicolo'].includes(event.label))continue;
     const at=new Date(event.start),second=at.getHours()*3600+at.getMinutes()*60+at.getSeconds();
@@ -368,6 +370,32 @@ function renderRecordingTimeline() {
   $('record-count').textContent=`${Math.floor(minutes/60)} h ${String(minutes%60).padStart(2,'0')} min`;
   $('record-summary').textContent=`Il blu indica le ore disponibili. ${recordingEvents.length} eventi AI in questo giorno. Durante la visione, il video prosegue automaticamente.`;
   $('record-day-label').textContent=$('record-day').value;
+}
+function renderNoiseTimeline(){
+  const layer=$('timeline-noise');layer.replaceChildren();
+  const bins=new Map();
+  for(const item of recordingNoise){
+    const date=new Date(item.start*1000),minute=date.getHours()*60+date.getMinutes();
+    const bin=Math.floor(minute/5);
+    bins.set(bin,Math.max(Number(item.peak_db),bins.get(bin)??-100));
+  }
+  for(const [bin,peak] of bins){
+    const level=Math.max(0,Math.min(1,(peak+55)/45));
+    if(level<=0)continue;
+    const bar=document.createElement('span');bar.className='noise-bar';
+    bar.style.left=(bin/288*100)+'%';bar.style.width=(1/288*100)+'%';
+    bar.style.height=(15+level*85)+'%';bar.style.opacity=String(0.35+level*0.65);
+    layer.append(bar);
+  }
+}
+async function loadNoise(){
+  const cam=$('record-cam').value,day=$('record-day').value;
+  if(!cam||!day||page!=='recordings')return;
+  try{
+    const levels=await request('api/noise/'+encodeURIComponent(cam)+'?day='+encodeURIComponent(day));
+    if(cam!==$('record-cam').value||day!==$('record-day').value)return;
+    recordingNoise=levels;renderNoiseTimeline();
+  }catch{recordingNoise=[];renderNoiseTimeline()}
 }
 function playRecording(index, offset=0) {
   if(index<0||index>=recordingSegments.length)return;
@@ -444,7 +472,7 @@ async function loadRecordings() {
 async function loadSegments() {
   const cid=$('record-cam').value,day=$('record-day').value,token=++recordingLoad;
   stopRecordingPlayback();
-  recordingEvents=[];$('timeline-events').replaceChildren();
+  recordingEvents=[];recordingNoise=[];$('timeline-events').replaceChildren();$('timeline-noise').replaceChildren();
   if(!cid||!day){showRecordingState('Nessuna registrazione disponibile. Controlla che la registrazione continua e il disco siano attivi.');return}
   try{
     const [segments,events]=await Promise.all([
@@ -456,6 +484,7 @@ async function loadSegments() {
     recordingEvents=events;
     if(!recordingSegments.length){showRecordingState(preferredRecordingSecond!=null?'Il video dell’evento è in preparazione…':'Nessuna registrazione completata in questo giorno.');if(preferredRecordingSecond!=null)scheduleEventRecordingRetry();return}
     renderRecordingTimeline();
+    loadNoise();
     if(preferredRecordingSecond!=null){
       const second=preferredRecordingSecond;
       const match=recordingSegments.find(s=>clipClock(s)<=second+5&&clipClock(s)+s.dur>second+5);
@@ -670,3 +699,4 @@ document.querySelectorAll('[data-jump]').forEach(el=>el.addEventListener('click'
 document.addEventListener('mousemove',showControls);document.addEventListener('touchstart',event=>{if(event.touches[0]&&event.touches[0].clientY<85)showControls()},{passive:true});
 window.addEventListener('resize',()=>{if(page==='live')renderLive(true)});
 setPage(['live','recordings','events','settings'].includes(new URLSearchParams(location.search).get('page'))?new URLSearchParams(location.search).get('page'):'live');update();setInterval(update,10000);setInterval(()=>{if(page==='live')for(const image of document.querySelectorAll('.tile img'))image.src=image.src.replace(/([?&])t=\d+/, '$1t='+Date.now())},30000);
+setInterval(loadNoise,30000);

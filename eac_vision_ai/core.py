@@ -16,6 +16,7 @@ from pathlib import Path
 from urllib.parse import quote, urlencode, urlsplit
 
 import aiohttp
+from noise import NoiseIndex
 
 DATA = Path(os.environ.get("EAC_DATA", "/data"))
 MEDIA = Path(os.environ.get("EAC_MEDIA", "/media"))
@@ -28,7 +29,7 @@ GO_API = "http://127.0.0.1:11984"
 GO_RTSP = "rtsp://127.0.0.1:18554"
 MAX_CAMERAS = 16
 APP_NAME = "EAC Vision AI Home Assistant"
-APP_VERSION = "0.1.11"
+APP_VERSION = "0.1.12"
 FILE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.mp4$")
 
 
@@ -172,6 +173,7 @@ class Vision:
         self._usage_bytes = 0
         self._cpu_sample: tuple[float, int] | None = None
         self._audio_cache: dict[str, tuple[float, bool | None]] = {}
+        self.noise = NoiseIndex(DATA, FFMPEG, self)
 
     def set_client_key(self, value: str) -> None:
         if not re.fullmatch(r"[A-Za-z0-9_-]{12,64}", value):
@@ -198,12 +200,14 @@ class Vision:
         self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15))
         await self.start_relay()
         self.tasks = [asyncio.create_task(self.ha_loop()), asyncio.create_task(self.record_loop()), asyncio.create_task(self.cleanup_loop())]
+        self.noise.start()
 
     async def stop(self) -> None:
         for task in self.tasks:
             task.cancel()
         if self.tasks:
             await asyncio.gather(*self.tasks, return_exceptions=True)
+        await self.noise.stop()
         await self.stop_all_recorders()
         await self.stop_relay()
         if self.session:

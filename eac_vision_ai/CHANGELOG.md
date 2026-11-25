@@ -1,5 +1,10 @@
 # Novità
 
+## 0.1.12
+
+- Le notifiche Companion degli eventi AI includono il collegamento al live della telecamera nell'app iPhone EAC Vision 1.2.3.
+- La barra delle registrazioni mostra i picchi audio nei blocchi di cinque minuti. L'indice usa solo l'audio dei file MP4 già chiusi, un file alla volta; non analizza il video. I risultati si popolano gradualmente e restano locali all'add-on.
+
 ## 0.1.11
 
 - Alleggerito il controllo dell'archivio per i segmenti brevi: il conteggio dello spazio usa la pulizia periodica e legge i dati di ogni file una sola volta. Lo stato audio viene aggiornato ogni cinque minuti, evitando scansioni frequenti del NAS.
