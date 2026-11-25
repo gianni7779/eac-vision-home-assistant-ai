@@ -9,7 +9,7 @@ Repository separato per installare **EAC Vision AI Home Assistant** dallo Store 
 1. In Home Assistant apri **Impostazioni → App → Store → ⋮ → Repository**.
 2. Aggiungi `https://github.com/gianni7779/eac-vision-home-assistant-ai`.
 3. Installa **EAC Vision AI Home Assistant** e avviala.
-   Se è già installata, aggiorna il repository dallo Store e poi l'app alla versione **0.1.6**.
+   Se è già installata, aggiorna il repository dallo Store e poi l'app alla versione **0.1.7**.
 4. Aggiungi prima le camere all'integrazione **ONVIF** di Home Assistant; EAC Vision le importerà automaticamente.
 5. Monta disco o NAS sotto `/media`, apri la dashboard e imposta la cartella dell'archivio.
 

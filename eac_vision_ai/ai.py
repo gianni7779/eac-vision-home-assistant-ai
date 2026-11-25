@@ -24,6 +24,30 @@ CLASSES = {0: "persona", 1: "veicolo", 2: "veicolo", 3: "veicolo", 5: "veicolo",
            14: "animale", 15: "animale", 16: "animale", 17: "animale", 18: "animale", 19: "animale"}
 
 
+def ffmpeg_error(stderr: str, returncode: int | None) -> str:
+    """Show the decoder failure without leaking ONVIF/RTSP credentials."""
+    lines = [line.strip() for line in stderr.splitlines() if line.strip()]
+    detail = " · ".join(lines[-3:]) if lines else "Nessun dettaglio dal decoder"
+    detail = re.sub(r"(?i)\b(?:rtsp|rtsps|onvif)://[^\s]+", "[flusso]", detail)
+    detail = re.sub(r"(?i)(?:password|authorization)\s*[:=]\s*[^\s]+", "credenziali=[nascoste]", detail)
+    return f"Video AI: FFmpeg terminato ({returncode if returncode is not None else '?'}) · {detail[:240]}"
+
+
+async def collect_ffmpeg_errors(stream: asyncio.StreamReader, chunks: list[str]) -> None:
+    while data := await stream.read(1024):
+        chunks.append(data.decode("utf-8", "replace"))
+        if len(chunks) > 8:
+            del chunks[:-8]
+
+
+def ai_ffmpeg_args(url: str) -> list[str]:
+    return [core.FFMPEG, "-hide_banner", "-loglevel", "error", "-nostdin",
+            "-threads", "1", "-rtsp_transport", "tcp", "-i", url,
+            "-map", "0:v:0", "-an", "-sn", "-vf",
+            "fps=5,scale=640:360:force_original_aspect_ratio=decrease:flags=bilinear,pad=640:360:(ow-iw)/2:(oh-ih)/2",
+            "-pix_fmt", "bgr24", "-threads:v", "1", "-f", "rawvideo", "pipe:1"]
+
+
 def iou(a: list[float], b: list[float]) -> float:
     x1, y1 = max(a[0], b[0]), max(a[1], b[1])
     x2, y2 = min(a[0] + a[2], b[0] + b[2]), min(a[1] + a[3], b[1] + b[3])
@@ -165,12 +189,12 @@ class VisionAI:
         frame_size = 640 * 360 * 3
         while True:
             proc = None
+            stderr_task = None
+            error_chunks: list[str] = []
             try:
-                proc = await asyncio.create_subprocess_exec(core.FFMPEG, "-hide_banner", "-loglevel", "error", "-nostdin",
-                    "-threads", "1", "-rtsp_transport", "tcp", "-rw_timeout", "5000000", "-i", core.GO_RTSP + "/" + cid,
-                    "-an", "-sn", "-vf", "fps=5,scale=640:360:force_original_aspect_ratio=decrease:flags=bilinear,pad=640:360:(ow-iw)/2:(oh-ih)/2",
-                    "-pix_fmt", "bgr24", "-f", "rawvideo", "pipe:1", stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.DEVNULL, stdin=asyncio.subprocess.DEVNULL)
+                proc = await asyncio.create_subprocess_exec(*ai_ffmpeg_args(core.GO_RTSP + "/" + cid + "?video"), stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE, stdin=asyncio.subprocess.DEVNULL)
+                stderr_task = asyncio.create_task(collect_ffmpeg_errors(proc.stderr, error_chunks))
                 background = None
                 while True:
                     raw = await asyncio.wait_for(proc.stdout.readexactly(frame_size), timeout=15)
@@ -203,7 +227,13 @@ class VisionAI:
             except asyncio.CancelledError:
                 raise
             except (OSError, asyncio.TimeoutError, asyncio.IncompleteReadError) as exc:
-                runtime["error"] = type(exc).__name__
+                if isinstance(exc, asyncio.IncompleteReadError) and proc:
+                    await proc.wait()
+                    if stderr_task:
+                        await stderr_task
+                    runtime["error"] = ffmpeg_error("".join(error_chunks), proc.returncode)
+                else:
+                    runtime["error"] = "Video AI: " + type(exc).__name__
                 runtime["watching"] = False
                 runtime["motion"] = False
                 self.changed()
@@ -211,6 +241,8 @@ class VisionAI:
                 if proc and proc.returncode is None:
                     proc.kill()
                     await proc.wait()
+                if stderr_task:
+                    await stderr_task
             await asyncio.sleep(10)
 
     async def worker(self):

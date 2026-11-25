@@ -1,5 +1,11 @@
 # Novità
 
+## 0.1.7
+
+- Il lettore AI richiede solo la traccia video al relay e usa un singolo thread anche per l'uscita FFmpeg; eliminato un timeout I/O ridondante che poteva chiudere il flusso.
+- Se il decoder si chiude prima del primo fotogramma, Impostazioni AI mostra il motivo restituito da FFmpeg, nascondendo eventuali URL e credenziali della telecamera.
+- Il controllo automatico include un flusso RTSP sintetico attraverso go2rtc e FFmpeg, oltre al video campione con persone.
+
 ## 0.1.3
 
 - La barra giornaliera delle registrazioni mostra dove l'AI ha rilevato persone (arancione), animali (verde) e veicoli (viola).
