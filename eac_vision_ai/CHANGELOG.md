@@ -1,5 +1,9 @@
 # Novità
 
+## 0.1.11
+
+- Alleggerito il controllo dell'archivio per i segmenti brevi: il conteggio dello spazio usa la pulizia periodica e legge i dati di ogni file una sola volta. Lo stato audio viene aggiornato ogni cinque minuti, evitando scansioni frequenti del NAS.
+
 ## 0.1.10
 
 - I segmenti MP4 vengono chiusi ogni 30 secondi, così un evento recente compare nelle registrazioni molto prima rispetto ai precedenti 5 minuti. La durata effettiva dipende dai fotogrammi chiave della camera.

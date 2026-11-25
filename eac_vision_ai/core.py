@@ -28,7 +28,7 @@ GO_API = "http://127.0.0.1:11984"
 GO_RTSP = "rtsp://127.0.0.1:18554"
 MAX_CAMERAS = 16
 APP_NAME = "EAC Vision AI Home Assistant"
-APP_VERSION = "0.1.10"
+APP_VERSION = "0.1.11"
 FILE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.mp4$")
 
 
@@ -183,7 +183,9 @@ class Vision:
         self.client_key = value
 
     def usage_bytes(self) -> int:
-        if time.monotonic() - self._usage_at > 60:
+        # The cleanup task refreshes this total every five minutes. Recount only
+        # before its first run so status polling cannot repeatedly scan the NAS.
+        if not self._usage_at:
             self._usage_bytes = sum(p.stat().st_size for cid in self.config["cameras"]
                                     for p in self.recording_files(cid))
             self._usage_at = time.monotonic()
@@ -573,9 +575,9 @@ class Vision:
         return [{"day": day} for day in sorted({p.name[:10] for p in self.completed_recording_files(cid)}, reverse=True)]
 
     def recorded_audio(self, cid: str) -> bool | None:
-        """Check the MP4 track table in a completed file, at most once a minute."""
+        """Check the MP4 track table in a completed file, at most every five minutes."""
         cached = self._audio_cache.get(cid)
-        if cached and time.monotonic() - cached[0] < 60:
+        if cached and time.monotonic() - cached[0] < 300:
             return cached[1]
         result = None
         try:
@@ -605,26 +607,32 @@ class Vision:
         root = self.storage_root(require_space=False)
         if not root:
             return
-        files = [p for cid in self.config["cameras"] for p in self.recording_files(cid)]
-        files.sort(key=lambda p: p.name)
+        by_camera = {cid: self.recording_files(cid) for cid in self.config["cameras"]}
+        files = sorted((p for camera_files in by_camera.values() for p in camera_files), key=lambda p: p.name)
         cutoff = time.time() - int(self.config.get("retention_days", 3)) * 86400
         active = set()
         for cid in self.recorders:
-            owned = self.recording_files(cid)
+            owned = by_camera.get(cid, [])
             if owned:
                 active.add(owned[-1])
-        total = sum(p.stat().st_size for p in files)
+        file_stats = []
+        for path in files:
+            try:
+                file_stats.append((path, path.stat()))
+            except OSError:
+                continue
+        total = sum(stat.st_size for _, stat in file_stats)
         disk = shutil.disk_usage(root)
         configured_limit = int(self.config.get("max_gb", 0)) * 1024**3
         limit = configured_limit or int(disk.total * .8)
         reserve = max(2 * 1024**3, int(disk.total * .05))
         free = disk.free
-        for path in files:
+        for path, stat in file_stats:
             try:
                 if path in active:
                     continue
-                if path.stat().st_mtime < cutoff or total > limit or free < reserve:
-                    size = path.stat().st_size
+                if stat.st_mtime < cutoff or total > limit or free < reserve:
+                    size = stat.st_size
                     path.unlink()
                     total -= size
                     free += size
