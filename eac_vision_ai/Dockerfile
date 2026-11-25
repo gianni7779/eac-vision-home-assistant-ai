@@ -12,7 +12,7 @@ RUN echo '20b46c6910734cb05ecefb234066f36868ff19b42ba1418a7a32e13a3e035712  /usr
     && chmod 755 /usr/local/bin/go2rtc
 COPY ai/yolox_tiny.onnx /opt/eac/ai/yolox_tiny.onnx
 COPY ai/LICENSE-YOLOX.txt /opt/eac/ai/LICENSE-YOLOX.txt
-COPY server.py core.py ai.py /opt/eac/
+COPY server.py core.py ai.py noise.py /opt/eac/
 COPY web/ /opt/eac/web/
 COPY run.sh /run.sh
 RUN chmod 755 /run.sh
