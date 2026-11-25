@@ -9,13 +9,14 @@ Repository separato per installare **EAC Vision AI Home Assistant** dallo Store 
 1. In Home Assistant apri **Impostazioni → App → Store → ⋮ → Repository**.
 2. Aggiungi `https://github.com/gianni7779/eac-vision-home-assistant-ai`.
 3. Installa **EAC Vision AI Home Assistant** e avviala.
+   Se è già installata, aggiorna il repository dallo Store e poi l'app alla versione **0.1.5**.
 4. Aggiungi prima le camere all'integrazione **ONVIF** di Home Assistant; EAC Vision le importerà automaticamente.
 5. Monta disco o NAS sotto `/media`, apri la dashboard e imposta la cartella dell'archivio.
 
 ## Funzioni
 
 - Dashboard delle camere selezionate, con fotogramma completo, vista singola, audio compatibile e schermo intero.
-- Live condiviso tramite go2rtc e registrazione continua H24 senza ricodificare il video. Se la telecamera fornisce audio, viene incluso nei nuovi file MP4 in AAC. Timeline giornaliera con anteprima video, audio, velocità 0,5×–4× e zoom.
+- Live condiviso tramite go2rtc e registrazione continua H24 senza ricodificare il video. Se la telecamera fornisce audio, viene incluso nei nuovi file MP4 in AAC. Timeline giornaliera con anteprima video, audio, velocità 0,5×–4× e zoom. Il blocco in scrittura compare nell'archivio dopo la chiusura, fino a circa 5 minuti dopo l'inizio.
 - **YOLOX Tiny**, lo stesso modello ONNX della versione PC: riconosce persone, veicoli e animali dopo un controllo del movimento. Sensibilità e categorie regolabili per camera.
 - Eventi AI con istantanea, filtro per camera/tipo, segni colorati sulla barra delle registrazioni (persone arancione, animali verde, veicoli viola), collegamento alla registrazione, evento `eac_vision_ai` nel bus di Home Assistant per le automazioni e API compatibile con i client EAC Vision. Il modello è elaborato sulla CPU; il numero di camere AI contemporanee parte da 4 ed è configurabile fino a 16 in base alla potenza effettiva del mini PC.
 - Notifiche per persone, animali e veicoli anche con EAC Vision chiusa: nelle app iPhone/Android scegli il dispositivo `notify.mobile_app_*` di Home Assistant Companion, i tipi di evento e prova l'invio. Le notifiche arrivano tramite l'app Home Assistant installata sul telefono.

@@ -366,7 +366,7 @@ async def notify_settings(request: web.Request) -> web.Response:
             if not isinstance(body, dict):
                 raise ValueError("Impostazioni notifiche non valide")
             await detector.set_notify(body)
-        return web.json_response({"targets": await detector.notify_targets(),
+        return web.json_response({"targets": await detector.notify_targets(), "labels": ["persona", "animale", "veicolo"],
                                   "subscriptions": detector.config["notify"]})
     except ValueError as exc:
         raise web.HTTPBadRequest(text=str(exc)) from exc
