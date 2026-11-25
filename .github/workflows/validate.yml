@@ -14,6 +14,8 @@ jobs:
         run: docker run --rm --entrypoint python3 eac-vision-ai -c "import sys,numpy as np;sys.path.insert(0,'/opt/eac');from ai import Detector;d=Detector('/opt/eac/ai/yolox_tiny.onnx');assert d.infer(np.zeros((360,640,3),dtype=np.uint8))==[];print(d.device)"
       - name: Decode a camera-like RTSP stream for AI
         run: docker run --rm --entrypoint python3 -e EAC_AI_APP_DIR=/opt/eac -v "$PWD/tests:/tests:ro" eac-vision-ai /tests/check_ai_stream.py
+      - name: Check Apple-compatible HEVC recordings
+        run: docker run --rm --entrypoint python3 -e EAC_AI_APP_DIR=/opt/eac -v "$PWD/tests:/tests:ro" eac-vision-ai /tests/check_apple_mp4.py
       - name: Detect a person in a sample video
         run: |
           curl --fail --location --retry 3 --output "$RUNNER_TEMP/person-video.avi" https://raw.githubusercontent.com/opencv/opencv/master/samples/data/vtest.avi

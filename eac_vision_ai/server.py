@@ -221,7 +221,8 @@ async def recording_file(request: web.Request) -> web.FileResponse:
         raise web.HTTPNotFound(text="Registrazione non trovata")
     if path not in v.completed_recording_files(cid, filename[:10]):
         raise web.HTTPNotFound(text="Registrazione ancora in corso")
-    return web.FileResponse(path, headers={"Content-Type": "video/mp4", "Accept-Ranges": "bytes"})
+    compatible = await v.mp4_compat.compatible_path(path)
+    return web.FileResponse(compatible, headers={"Content-Type": "video/mp4", "Accept-Ranges": "bytes"})
 
 
 async def recordings(request: web.Request) -> web.Response:

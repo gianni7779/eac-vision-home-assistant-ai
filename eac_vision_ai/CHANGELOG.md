@@ -1,5 +1,10 @@
 # Novità
 
+## 0.1.14
+
+- I picchi audio nella timeline di Home Assistant sono rosa, distinti dagli eventi persona arancioni.
+- I file HEVC marcati `hev1` vengono preparati su richiesta come `hvc1` per il lettore iPhone. Anche le registrazioni già esistenti restano disponibili; il video viene copiato senza ricodifica e la copia temporanea ha un limite di 256 MB.
+
 ## 0.1.13
 
 - Le notifiche Companion degli eventi AI includono il collegamento al live della telecamera nell'app iPhone EAC Vision 1.2.3.

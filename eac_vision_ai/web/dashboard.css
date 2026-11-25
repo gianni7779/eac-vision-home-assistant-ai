@@ -69,8 +69,8 @@ body:not(.live-mode) #topbar { background:#091c2bcc; backdrop-filter:blur(14px);
 .timeline-span { position:absolute; top:0; bottom:0; background:linear-gradient(180deg,#47c7f1,#168bce); min-width:2px; box-shadow:0 0 8px #50bfff55; }
 .timeline-events { position:absolute; inset:0; pointer-events:none; z-index:1; }
 .timeline-noise { position:absolute; inset:0; pointer-events:none; overflow:hidden; border-radius:7px; z-index:1; }
-.noise-bar { position:absolute; bottom:0; min-width:2px; background:#fbc65e; border-radius:2px 2px 0 0; box-shadow:0 0 5px #fbc65e99; }
-.noise-key { display:inline-block; width:10px; height:10px; border-radius:2px; background:#fbc65e; }
+.noise-bar { position:absolute; bottom:0; min-width:2px; background:#ff4faa; border-radius:2px 2px 0 0; box-shadow:0 0 5px #ff4faa99; }
+.noise-key { display:inline-block; width:10px; height:10px; border-radius:2px 2px 0 0; background:#ff4faa; }
 .timeline-event { position:absolute; top:3px; bottom:3px; width:4px; min-width:4px; border-radius:3px; box-shadow:0 0 6px currentColor; }
 .timeline-event.persona, .event-key.persona { background:#ffae35; color:#ffae35; }
 .timeline-event.animale, .event-key.animale { background:#70df7c; color:#70df7c; }
