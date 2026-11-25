@@ -50,24 +50,27 @@ def ai_ffmpeg_args(url: str) -> list[str]:
             "-pix_fmt", "bgr24", "-threads:v", "1", "-f", "rawvideo", "pipe:1"]
 
 
-def substream_source(source: str, discovered: dict) -> str | None:
-    """Use only an explicitly named secondary ONVIF profile."""
+def substream_sources(source: str, discovered: dict) -> list[str]:
+    """List other profiles for this ONVIF camera, preferring named low streams."""
     base = urlsplit(source)
     current = parse_qs(base.query).get("subtype", [""])[0]
     if base.scheme != "onvif" or not current or not isinstance(discovered, dict):
-        return None
+        return []
+    candidates: list[tuple[bool, str]] = []
     for item in discovered.get("sources", []):
         if not isinstance(item, dict):
             continue
         candidate = urlsplit(str(item.get("url", "")))
         token = parse_qs(candidate.query).get("subtype", [""])[0]
-        if (candidate.scheme, candidate.netloc, candidate.path) != (base.scheme, base.netloc, base.path):
+        if (candidate.scheme, candidate.hostname, candidate.port, candidate.path) != (
+                base.scheme, base.hostname, base.port, base.path):
             continue
         if not token or token == current or "snapshot" in candidate.query:
             continue
-        if re.search(r"(?i)(?:sub|low|secondary)", token):
-            return urlunsplit((base.scheme, base.netloc, base.path, "subtype=" + quote(token, safe=""), ""))
-    return None
+        url = urlunsplit((base.scheme, base.netloc, base.path, "subtype=" + quote(token, safe=""), ""))
+        if url not in [value for _, value in candidates]:
+            candidates.append((bool(re.search(r"(?i)(?:sub|low|secondary)", token)), url))
+    return [url for _, url in sorted(candidates, key=lambda item: not item[0])]
 
 
 def iou(a: list[float], b: list[float]) -> float:
@@ -249,38 +252,38 @@ class VisionAI:
         async with self.vision.session.get(core.GO_API + "/api/onvif", params={"src": base_url}, timeout=timeout) as response:
             if response.status != 200:
                 return
-            candidate = substream_source(source, await response.json())
-        if not candidate:
-            return
+            candidates = substream_sources(source, await response.json())
         name = "ai_" + cid
-        async with self.vision.session.put(core.GO_API + "/api/streams",
-                params={"name": name, "src": candidate}, timeout=timeout) as response:
-            if response.status not in (200, 201, 204):
-                return
         probe = str(Path(core.FFMPEG).with_name("ffprobe"))
         if not Path(probe).is_file():
             return
-        proc = await asyncio.create_subprocess_exec(probe, "-v", "error", "-rtsp_transport", "tcp",
-            "-i", core.GO_RTSP + "/" + name + "?video", "-select_streams", "v:0",
-            "-show_entries", "stream=width,height", "-of", "json",
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
-        try:
-            output, _ = await asyncio.wait_for(proc.communicate(), 12)
-        except (asyncio.TimeoutError, asyncio.CancelledError) as exc:
-            proc.kill()
-            await proc.wait()
-            if isinstance(exc, asyncio.CancelledError):
-                raise
-            return
-        if proc.returncode:
-            return
-        streams = json.loads(output).get("streams", [])
-        if not isinstance(streams, list) or not streams or not isinstance(streams[0], dict):
-            return
-        width, height = int(streams[0].get("width", 0)), int(streams[0].get("height", 0))
-        if width >= 640 and height >= 360 and width * height <= 1280 * 720:
-            self.low_streams[cid] = name
-            self.changed()
+        for candidate in candidates[:4]:
+            async with self.vision.session.put(core.GO_API + "/api/streams",
+                    params={"name": name, "src": candidate}, timeout=timeout) as response:
+                if response.status not in (200, 201, 204):
+                    continue
+            proc = await asyncio.create_subprocess_exec(probe, "-v", "error", "-rtsp_transport", "tcp",
+                "-i", core.GO_RTSP + "/" + name + "?video", "-select_streams", "v:0",
+                "-show_entries", "stream=width,height", "-of", "json",
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
+            try:
+                output, _ = await asyncio.wait_for(proc.communicate(), 12)
+            except (asyncio.TimeoutError, asyncio.CancelledError) as exc:
+                proc.kill()
+                await proc.wait()
+                if isinstance(exc, asyncio.CancelledError):
+                    raise
+                continue
+            if proc.returncode:
+                continue
+            streams = json.loads(output).get("streams", [])
+            if not isinstance(streams, list) or not streams or not isinstance(streams[0], dict):
+                continue
+            width, height = int(streams[0].get("width", 0)), int(streams[0].get("height", 0))
+            if width >= 640 and height >= 360 and width * height <= 1280 * 720:
+                self.low_streams[cid] = name
+                self.changed()
+                return
 
     async def watch(self, cid: str, stream_name: str):
         runtime = self.runtime.setdefault(cid, {"motion": False, "counts": dict.fromkeys(LABELS, 0),

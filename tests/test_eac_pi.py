@@ -128,7 +128,7 @@ class VisionTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue((await disabled.json())["has_source"])
         self.assertFalse((await disabled.json())["selected"])
 
-    async def test_ai_prefers_only_an_explicit_onvif_substream(self):
+    async def test_ai_prefers_named_low_stream_and_probes_other_profiles(self):
         source = self.vision.sources[self.cid]
         base = source.split("?", 1)[0]
         profiles = {"sources": [
@@ -136,11 +136,11 @@ class VisionTest(unittest.IsolatedAsyncioTestCase):
             {"name": "low", "url": base + "?subtype=subStream"},
             {"name": "snapshot", "url": base + "?subtype=subStream&snapshot"},
         ]}
-        self.assertEqual(ai.substream_source(source, profiles), base + "?subtype=subStream")
-        self.assertIsNone(ai.substream_source(source, {"sources": [
+        self.assertEqual(ai.substream_sources(source, profiles), [base + "?subtype=subStream"])
+        self.assertEqual(ai.substream_sources(source, {"sources": [
             {"url": base + "?subtype=profile_2"},
             {"url": "onvif://other:password@192.168.1.99:80?subtype=subStream"},
-        ]}))
+        ]}), [base + "?subtype=profile_2"])
 
     async def test_existing_motion_configuration_moves_to_h24(self):
         cid = self.cid

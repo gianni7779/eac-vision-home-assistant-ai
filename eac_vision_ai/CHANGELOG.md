@@ -1,5 +1,10 @@
 # Novità
 
+## 0.1.9
+
+- La scelta del video leggero per l'AI prova anche i profili ONVIF con nomi generici come `profile_2`, verificandone la risoluzione prima di usarli. Questo aiuta le telecamere che non chiamano il flusso secondario `subStream`.
+- Live e registrazioni H24 continuano sul profilo principale; se un profilo AI non si apre o è troppo piccolo, resta attivo quello principale.
+
 ## 0.1.8
 
 - Quando la camera offre un profilo ONVIF secondario compatibile, l'AI lo usa per ridurre il lavoro di decodifica; il live e le registrazioni H24 restano sul flusso principale.
