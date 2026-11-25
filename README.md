@@ -9,7 +9,7 @@ Repository separato per installare **EAC Vision AI Home Assistant** dallo Store 
 1. In Home Assistant apri **Impostazioni → App → Store → ⋮ → Repository**.
 2. Aggiungi `https://github.com/gianni7779/eac-vision-home-assistant-ai`.
 3. Installa **EAC Vision AI Home Assistant** e avviala.
-   Se è già installata, aggiorna il repository dallo Store e poi l'app alla versione **0.1.5**.
+   Se è già installata, aggiorna il repository dallo Store e poi l'app alla versione **0.1.6**.
 4. Aggiungi prima le camere all'integrazione **ONVIF** di Home Assistant; EAC Vision le importerà automaticamente.
 5. Monta disco o NAS sotto `/media`, apri la dashboard e imposta la cartella dell'archivio.
 
@@ -25,6 +25,8 @@ Repository separato per installare **EAC Vision AI Home Assistant** dallo Store 
 - Collegamento dei client da casa con IP locale/porta 8767, o fuori casa tramite Tailscale. DuckDNS richiede un proxy HTTPS che inoltri `/eacnvr/` e i WebSocket.
 
 L'AI non modifica i video H24. L'analisi usa un flusso video ridotto a 640×360, 5 fps (come la versione PC), con controllo del movimento e un solo lavoratore ONNX Runtime. Il riquadro di ogni camera mostra i fotogrammi ricevuti e le analisi effettuate: dopo un passaggio davanti alla camera, il contatore delle analisi deve aumentare. Se la memoria disponibile scende sotto 768 MB l'analisi si sospende temporaneamente. La velocità e il numero di camere sostenibili dipendono dal mini PC, dai codec, dal bitrate e dal NAS. **Non è stata ancora verificata sul tuo HA reale**: prova inizialmente con una camera AI, poi aumenta gradualmente.
+
+La pipeline AI viene provata automaticamente su un [video campione di OpenCV con persone](https://github.com/opencv/opencv/blob/master/samples/data/vtest.avi): il test attraversa rilevamento del movimento, modello ONNX e creazione dell'evento `persona`. Nelle Impostazioni AI, per ogni camera, i contatori mostrano fotogrammi, analisi e persone nel fotogramma; "In attesa di movimento" indica che il video arriva ma il modello non è ancora stato chiamato. Questo test non sostituisce la prova sul flusso della tua telecamera.
 
 Gli eventi vengono conservati almeno 7 giorni nei dati dell'app, mentre le registrazioni seguono i giorni impostati per l'archivio. Il modello e la licenza Apache 2.0 di YOLOX sono inclusi in `eac_vision_ai/ai/`.
 
