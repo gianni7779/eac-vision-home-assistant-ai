@@ -68,6 +68,29 @@ class VisionTest(unittest.IsolatedAsyncioTestCase):
         self.temp.cleanup()
         os.environ.pop("EAC_DEV", None)
 
+    async def test_view_order_is_saved_and_shared_with_clients(self):
+        second = core.camera_id("camera.back")
+        self.vision.config["cameras"][second] = {"entity_id": "camera.back", "name": "Retro", "mode": "off"}
+        self.vision.sources[second] = "onvif://camera-back"
+        self.vision.discovered.append({"id": second, "entity_id": "camera.back", "name": "Retro"})
+        self.vision.config["selected"].append(second)
+        self.vision.save()
+
+        order = [second, self.cid]
+        response = await self.ingress.post("/api/view/order", json={"order": order})
+        self.assertEqual(response.status, 200, await response.text())
+        self.assertEqual((await response.json())["selected_order"], order)
+        self.assertEqual((await (await self.ingress.get("/api/status")).json())["selected_order"], order)
+        key = self.vision.client_key
+        views = await (await self.lan.get("/eacnvr/views?key=" + key)).json()
+        self.assertEqual(views[0]["slots"], order)
+        self.assertEqual(json.loads(self.vision.config_path.read_text(encoding="utf-8"))["selected"], order)
+
+        for invalid in ([self.cid, self.cid], [second, "unknown"], [second]):
+            response = await self.ingress.post("/api/view/order", json={"order": invalid})
+            self.assertEqual(response.status, 400)
+            self.assertEqual(self.vision.config["selected"], order)
+
     async def test_onvif_import_storage_and_nvr_contract(self):
         response = await self.ingress.get("/api/status")
         self.assertEqual(response.status, 200)

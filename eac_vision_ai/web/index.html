@@ -32,10 +32,12 @@
       <button id="menu-button" title="Menu" aria-label="Apri menu">☰</button>
       <div class="top-title"><strong id="page-title">Telecamere</strong><span id="top-subtitle">Vista Principale</span></div>
       <div class="top-spacer"></div>
+      <button id="reorder-button" type="button" aria-pressed="false" disabled>Sposta</button>
       <label id="live-budget-label">Live <select id="live-budget"><option value="4">4</option><option value="8">8</option><option value="16">16</option></select></label>
       <button id="refresh-button" title="Aggiorna da Home Assistant">⟳</button>
     </div>
     <section id="live-page" class="page live-page">
+      <div id="reorder-help" hidden>Tocca una telecamera e poi la nuova posizione. Sul PC puoi anche trascinarla.</div>
       <div id="camera-grid" class="camera-grid"></div>
       <div id="empty-live" class="empty" hidden><span class="empty-icon">◉</span><h1>La tua vista è pronta</h1><p>Importa le telecamere ONVIF già presenti in Home Assistant e scegli quali mostrare.</p><button id="setup-button" class="primary">Configura telecamere</button></div>
     </section>

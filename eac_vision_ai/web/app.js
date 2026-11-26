@@ -4,6 +4,7 @@ const $ = id => document.getElementById(id);
 const base = location.pathname.endsWith('/') ? location.pathname : location.pathname + '/';
 const apiUrl = path => base + path;
 let state = null, page = 'live', players = [], visibleIds = '', selectedCam = null, toastTimer = 0, hideTimer = 0, storageDirty = false;
+let reorderMode = false, moveSource = null, savingOrder = false;
 let recordingSegments = [], recordingEvents = [], recordingNoise = [], recordingIndex = -1, pendingSeek = 0, recordingLoad = 0;
 let previewIndex = -1, previewOffset = 0, previewLast = 0, previewDragging = false, previewSecond = 0, skipTimelineClick = false;
 let detailCamId = null, detailPlayer = null, detailCams = [], detailAudioAvailable = false, detailAudioChecked = false, detailAudioOn = false, preferredRecordingCam = null;
@@ -25,9 +26,10 @@ async function request(path, options = {}) {
 function showControls() {
   document.body.classList.add('controls-visible');
   clearTimeout(hideTimer);
-  hideTimer = setTimeout(() => { if (page === 'live' && !document.body.classList.contains('menu-open')) document.body.classList.remove('controls-visible'); }, 3500);
+  hideTimer = setTimeout(() => { if (page === 'live' && !reorderMode && !document.body.classList.contains('menu-open')) document.body.classList.remove('controls-visible'); }, 3500);
 }
 function setPage(next) {
+  if (next !== 'live' && reorderMode) setReorderMode(false);
   if (next !== 'live' && detailCamId) closeCameraDetail(false);
   page = next;
   document.body.classList.toggle('live-mode', page === 'live');
@@ -40,6 +42,7 @@ function setPage(next) {
   $('page-title').textContent = ({live:'Telecamere',recordings:'Registrazioni',events:'Eventi AI',settings:'Impostazioni'})[page];
   $('top-subtitle').textContent = page === 'live' ? 'Vista Principale' : 'EAC Vision AI Home Assistant';
   $('live-budget-label').hidden = page !== 'live';
+  $('reorder-button').hidden = page !== 'live';
   if (page !== 'live') { stopPlayers(); visibleIds = ''; }
   if (page !== 'recordings') stopRecordingPlayback();
   if (page === 'live') renderLive(true);
@@ -66,9 +69,59 @@ function cameraRows(n) {
   for (let i=0;i<best;i++) result.push(quotient+(i<extra?1:0));
   return result;
 }
+function orderedLiveCameras() {
+  const selected = state.cameras.filter(cam => cam.selected && cam.has_source);
+  const order = Array.isArray(state.selected_order) ? state.selected_order : [];
+  const byId = new Map(selected.map(cam => [cam.id, cam]));
+  return [...order.map(id => byId.get(id)).filter(Boolean), ...selected.filter(cam => !order.includes(cam.id))].slice(0, 16);
+}
+function setReorderMode(enabled) {
+  reorderMode = enabled; moveSource = null;
+  document.body.classList.toggle('reorder-mode', enabled);
+  $('reorder-button').textContent = enabled ? 'Fine' : 'Sposta';
+  $('reorder-button').setAttribute('aria-pressed', String(enabled));
+  $('reorder-help').hidden = !enabled;
+  for (const tile of document.querySelectorAll('#camera-grid .tile')) {
+    tile.draggable = enabled;
+    tile.classList.remove('move-source', 'move-target');
+    tile.setAttribute('aria-label', (enabled ? 'Sposta ' : 'Apri ') + (state?.cameras.find(cam => cam.id === tile.dataset.id)?.name || 'telecamera'));
+  }
+  showControls();
+}
+async function moveSelectedCamera(from, to) {
+  if (savingOrder || !state || from === to) return;
+  const visible = orderedLiveCameras().map(cam => cam.id);
+  const source = visible.indexOf(from), target = visible.indexOf(to);
+  if (source < 0 || target < 0) return;
+  visible.splice(target, 0, visible.splice(source, 1)[0]);
+  const visibleSet = new Set(visible), current = state.selected_order;
+  let index = 0;
+  const order = current.map(id => visibleSet.has(id) ? visible[index++] : id);
+  savingOrder = true;
+  try {
+    const saved = await request('api/view/order', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({order})});
+    state.selected_order = saved.selected_order;
+    moveSource = null;
+    renderLive(true);
+    toast('Ordine salvato nella vista Principale');
+  } catch (error) { toast('Ordine non salvato: ' + error.message); }
+  finally { savingOrder = false; }
+}
+function chooseLiveTile(id) {
+  if (!reorderMode) { openCameraDetail(id); return; }
+  if (savingOrder) return;
+  if (!moveSource) {
+    moveSource = id;
+    for (const tile of document.querySelectorAll('#camera-grid .tile')) tile.classList.toggle('move-source', tile.dataset.id === id);
+    toast('Ora tocca la posizione in cui vuoi spostare la telecamera');
+  } else if (moveSource === id) {
+    moveSource = null;
+    for (const tile of document.querySelectorAll('#camera-grid .tile')) tile.classList.remove('move-source');
+  } else moveSelectedCamera(moveSource, id);
+}
 function makeTile(cam, live) {
   const tile = document.createElement('div'); tile.className='tile'; tile.dataset.id=cam.id;
-  const image = document.createElement('img'); image.alt=''; image.loading='lazy'; image.src=apiUrl('api/snapshot/'+encodeURIComponent(cam.id)+'?t='+Date.now()); tile.append(image);
+  const image = document.createElement('img'); image.alt=''; image.loading='lazy'; image.draggable=false; image.src=apiUrl('api/snapshot/'+encodeURIComponent(cam.id)+'?t='+Date.now()); tile.append(image);
   if (live) {
     const video=document.createElement('video'); video.autoplay=true; video.muted=true; video.playsInline=true; video.style.opacity='0';
     video.addEventListener('playing',()=>{video.style.opacity='1'});
@@ -82,15 +135,23 @@ function makeTile(cam, live) {
   const badge=document.createElement('span'); badge.className='badge'; badge.textContent=live?'LIVE':'ANTEPRIMA'; shade.append(badge);
   tile.append(shade);
   if (cam.recording) { const rec=document.createElement('span'); rec.className='badge rec'; rec.textContent='● REC'; rec.style.cssText='position:absolute;top:12px;right:12px'; tile.append(rec); }
-  tile.tabIndex=0;tile.setAttribute('role','button');tile.setAttribute('aria-label','Apri '+cam.name);
-  tile.addEventListener('click', () => openCameraDetail(cam.id));
-  tile.addEventListener('keydown', event => {if(event.key==='Enter'||event.key===' '){event.preventDefault();openCameraDetail(cam.id)}});
+  tile.tabIndex=0;tile.setAttribute('role','button');tile.setAttribute('aria-label',(reorderMode?'Sposta ':'Apri ')+cam.name);
+  tile.draggable = reorderMode;
+  if (moveSource === cam.id) tile.classList.add('move-source');
+  tile.addEventListener('click', () => chooseLiveTile(cam.id));
+  tile.addEventListener('keydown', event => {if(event.key==='Enter'||event.key===' '){event.preventDefault();chooseLiveTile(cam.id)}});
+  tile.addEventListener('dragstart', event => {if(!reorderMode||savingOrder){event.preventDefault();return}moveSource=cam.id;event.dataTransfer.setData('text/plain',cam.id);event.dataTransfer.effectAllowed='move';tile.classList.add('move-source')});
+  tile.addEventListener('dragover', event => {if(reorderMode){event.preventDefault();tile.classList.add('move-target')}});
+  tile.addEventListener('dragleave', () => tile.classList.remove('move-target'));
+  tile.addEventListener('drop', event => {if(!reorderMode)return;event.preventDefault();tile.classList.remove('move-target');const from=event.dataTransfer.getData('text/plain');if(from&&from!==cam.id)moveSelectedCamera(from,cam.id)});
+  tile.addEventListener('dragend', () => {for(const item of document.querySelectorAll('#camera-grid .tile'))item.classList.remove('move-target')});
   return tile;
 }
 function renderLive(force=false) {
   if (!state || page !== 'live') return;
   if (detailCamId) return;
-  const cams=state.cameras.filter(c=>c.selected&&c.has_source).slice(0,16);
+  const cams=orderedLiveCameras();
+  $('reorder-button').disabled=cams.length<2&&!reorderMode;
   const signature=cams.map(c=>c.id+':'+c.name+':'+c.recording).join('|')+':'+budget;
   if (!force && signature===visibleIds) return;
   visibleIds=signature; stopPlayers();
@@ -609,6 +670,7 @@ $('sidebar').addEventListener('mouseleave',()=>document.body.classList.remove('n
 $('setup-button').addEventListener('click',()=>setPage('settings'));
 function setBudget(value){budget=Number(value);if(![4,8,16].includes(budget))budget=4;localStorage.setItem('eac-live-budget',String(budget));$('live-budget').value=String(budget);$('settings-live-budget').value=String(budget);renderLive(true)}
 $('live-budget').addEventListener('change',()=>setBudget($('live-budget').value));
+$('reorder-button').addEventListener('click',()=>setReorderMode(!reorderMode));
 $('settings-live-budget').addEventListener('change',()=>setBudget($('settings-live-budget').value));
 $('refresh-button').addEventListener('click',async()=>{try{state=await request('api/refresh',{method:'POST'});renderSettings();renderLive(true);toast('Telecamere aggiornate')}catch(error){toast(error.message)}});
 $('discover-button').addEventListener('click',()=>$('refresh-button').click());

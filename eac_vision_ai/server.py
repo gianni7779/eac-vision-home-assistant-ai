@@ -152,6 +152,19 @@ async def set_view(request: web.Request) -> web.Response:
     return web.json_response({"show_names": v.config["show_names"]})
 
 
+async def set_view_order(request: web.Request) -> web.Response:
+    v = vision(request)
+    order = (await request.json()).get("order")
+    selected = v.config["selected"]
+    if (not isinstance(order, list) or len(order) != len(selected)
+            or any(not isinstance(cid, str) for cid in order)
+            or len(set(order)) != len(order) or set(order) != set(selected)):
+        raise web.HTTPBadRequest(text="L'ordine deve contenere esattamente le telecamere della vista")
+    v.config["selected"] = order
+    v.save()
+    return web.json_response({"selected_order": order})
+
+
 async def snapshot(request: web.Request) -> web.Response:
     cid = cid_of(request)
     v = vision(request)
@@ -408,6 +421,7 @@ def make_ingress(v: Vision) -> web.Application:
     app.router.add_post("/api/storage", set_storage)
     app.router.add_post("/api/client-key", set_client_key)
     app.router.add_post("/api/view", set_view)
+    app.router.add_post("/api/view/order", set_view_order)
     app.router.add_get("/api/snapshot/{cid}", snapshot)
     app.router.add_get("/api/live/{cid}", relay_live)
     app.router.add_get("/api/recordings/{cid}", recordings)

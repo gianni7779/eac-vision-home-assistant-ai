@@ -1,5 +1,9 @@
 # Novità
 
+## 0.1.15
+
+- La vista Telecamere permette di riordinare le camere con trascinamento su PC oppure toccando camera e posizione. L'ordine resta salvato e viene restituito anche alle app collegate.
+
 ## 0.1.14
 
 - I picchi audio nella timeline di Home Assistant sono rosa, distinti dagli eventi persona arancioni.

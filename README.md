@@ -9,13 +9,13 @@ Repository separato per installare **EAC Vision AI Home Assistant** dallo Store 
 1. In Home Assistant apri **Impostazioni → App → Store → ⋮ → Repository**.
 2. Aggiungi `https://github.com/gianni7779/eac-vision-home-assistant-ai`.
 3. Installa **EAC Vision AI Home Assistant** e avviala.
-   Se è già installata, aggiorna il repository dallo Store e poi l'app alla versione **0.1.14**.
+   Se è già installata, aggiorna il repository dallo Store e poi l'app alla versione **0.1.15**.
 4. Aggiungi prima le camere all'integrazione **ONVIF** di Home Assistant; EAC Vision le importerà automaticamente.
 5. Monta disco o NAS sotto `/media`, apri la dashboard e imposta la cartella dell'archivio.
 
 ## Funzioni
 
-- Dashboard delle camere selezionate, con fotogramma completo, vista singola, audio compatibile e schermo intero.
+- Dashboard delle camere selezionate, con fotogramma completo, vista singola, audio compatibile e schermo intero. Nella vista Telecamere premi **Sposta** per riordinare: tocca una camera e poi la nuova posizione, oppure trascinala su PC. Premi **Fine** quando hai terminato. L'ordine resta salvato e viene condiviso con le app collegate.
 - Live condiviso tramite go2rtc e registrazione continua H24 senza ricodificare il video. Se il profilo ONVIF della telecamera fornisce audio, viene incluso nei nuovi file MP4 in AAC; le impostazioni mostrano se l'ultima registrazione contiene la traccia audio. Timeline giornaliera con anteprima video, audio, velocità 0,5×–4×, zoom e picchi del volume audio nei tratti registrati. I picchi sono rosa, distinti dagli eventi persona arancioni. I segmenti si chiudono ogni circa 30 secondi; la durata esatta dipende dai fotogrammi chiave della telecamera. Il collegamento dagli eventi aspetta il segmento corretto e lo apre automaticamente. I file H.265 marcati `hev1` vengono preparati come `hvc1` su richiesta per iPhone, senza ricodificare il video.
 - **YOLOX Tiny**, lo stesso modello ONNX della versione PC: riconosce persone, veicoli e animali dopo un controllo del movimento. Sensibilità e categorie regolabili per camera.
 - Eventi AI con istantanea, filtro per camera/tipo, segni colorati sulla barra delle registrazioni (persone arancione, animali verde, veicoli viola), collegamento alla registrazione, evento `eac_vision_ai` nel bus di Home Assistant per le automazioni e API compatibile con i client EAC Vision. Il modello è elaborato sulla CPU; il numero di camere AI contemporanee parte da 4 ed è configurabile fino a 16 in base alla potenza effettiva del mini PC.
